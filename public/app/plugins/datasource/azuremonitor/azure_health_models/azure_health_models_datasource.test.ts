@@ -9,6 +9,7 @@ import createMockQuery from '../mocks/query';
 import { type AzureMonitorQuery } from '../types/query';
 
 import AzureHealthModelsDatasource, { parseHealthModelResourceId } from './azure_health_models_datasource';
+import { type HealthModelsClient } from './healthModelsClient';
 import { HEALTH_MODELS_API_VERSION } from './types';
 
 const subscriptionId = '11111111-1111-1111-1111-111111111111';
@@ -19,6 +20,16 @@ const queryRange = {
   raw: { from: 'now-1d', to: 'now' },
 };
 const queryTimestamp = encodeURIComponent(queryRange.to.toISOString());
+
+function createMockHealthModelsClient(overrides: Partial<HealthModelsClient> = {}): HealthModelsClient {
+  return {
+    listHealthModels: jest.fn().mockResolvedValue([]),
+    listEntities: jest.fn().mockResolvedValue([]),
+    listRelationships: jest.fn().mockResolvedValue([]),
+    getEntityHistory: jest.fn().mockResolvedValue([]),
+    ...overrides,
+  };
+}
 
 describe('AzureHealthModelsDatasource', () => {
   it('loads Health Models directly from the Microsoft.CloudHealth ARM API', async () => {
@@ -57,6 +68,46 @@ describe('AzureHealthModelsDatasource', () => {
         } as DataQueryRequest<AzureMonitorQuery>)
       )
     ).rejects.toThrow('does not belong to the selected subscription');
+  });
+
+  it('loads graph data through the configured plane-neutral client', async () => {
+    const healthModelsClient = createMockHealthModelsClient({
+      listEntities: jest.fn().mockResolvedValue([
+        {
+          id: `${healthModelId}/entities/entity-one`,
+          name: 'entity-one',
+          type: 'Microsoft.CloudHealth/healthmodels/entities',
+          properties: { displayName: 'Entity One', healthState: 'Healthy' },
+        },
+      ]),
+      listRelationships: jest.fn().mockResolvedValue([]),
+    });
+    const datasource = new AzureHealthModelsDatasource(createMockInstanceSetttings(), undefined, healthModelsClient);
+    const getResource = jest.spyOn(datasource, 'getResource');
+    const query = createMockQuery({
+      queryType: AzureQueryType.AzureHealthModels,
+      subscription: subscriptionId,
+      azureHealthModels: { healthModelId },
+    });
+
+    const response = await lastValueFrom(
+      datasource.query({
+        targets: [query],
+        range: queryRange,
+      } as DataQueryRequest<AzureMonitorQuery>)
+    );
+
+    expect(response.data.map((frame) => frame.name)).toEqual(['nodes', 'edges']);
+    expect(response.data[0].fields.find((field: Field) => field.name === 'title')?.values).toEqual(['Entity One']);
+    expect(jest.mocked(healthModelsClient.listEntities)).toHaveBeenCalledWith(
+      healthModelId,
+      '2026-01-02T03:04:05.000Z'
+    );
+    expect(jest.mocked(healthModelsClient.listRelationships)).toHaveBeenCalledWith(
+      healthModelId,
+      '2026-01-02T03:04:05.000Z'
+    );
+    expect(getResource).not.toHaveBeenCalled();
   });
 
   it('returns paginated entity history as stepwise time series over the query range', async () => {

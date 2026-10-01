@@ -14,6 +14,11 @@ export interface HealthModelResourceId {
   healthModelName: string;
 }
 
+export interface HealthModelTimeRange {
+  from: string;
+  to: string;
+}
+
 export interface HealthModel {
   id: string;
   name: string;

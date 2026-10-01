@@ -16,34 +16,37 @@ import { GraphDrawStyle, LineInterpolation } from '@grafana/schema';
 
 import { type AzureMonitorQuery } from '../types/query';
 import { type AzureMonitorDataSourceJsonData } from '../types/types';
-import { fetchAllArmPages, routeNames } from '../utils/common';
 
 import { getEntityHealthMetrics } from './entityHealthMetrics';
+import { ArmHealthModelsClient, type HealthModelsClient, type HealthModelsResourceClient } from './healthModelsClient';
 import {
-  type ArmListResponse,
-  HEALTH_MODELS_API_VERSION,
   type HealthModel,
   type HealthModelEntity,
-  type HealthModelEntityHistoryResponse,
   type HealthModelEntityHistoryTransition,
   type HealthModelRelationship,
   type HealthModelResourceId,
+  type HealthModelTimeRange,
 } from './types';
 
-const ENTITY_HISTORY_PAGE_SIZE = 1000;
 const ENTITY_HISTORY_CONCURRENCY = 10;
 
 export default class AzureHealthModelsDatasource extends DataSourceWithBackend<
   AzureMonitorQuery,
   AzureMonitorDataSourceJsonData
 > {
-  private readonly resourcePath = routeNames.azureMonitor;
+  private readonly healthModelsClient: HealthModelsClient;
 
   constructor(
     instanceSettings: DataSourceInstanceSettings<AzureMonitorDataSourceJsonData>,
-    private readonly templateSrv: TemplateSrv = getTemplateSrv()
+    private readonly templateSrv: TemplateSrv = getTemplateSrv(),
+    healthModelsClient?: HealthModelsClient
   ) {
     super(instanceSettings);
+    const resourceClient: HealthModelsResourceClient = {
+      get: <T>(path: string) => this.getResource<T>(path),
+      post: <T>(path: string, body: Record<string, string | number>) => this.postResource<T>(path, body),
+    };
+    this.healthModelsClient = healthModelsClient ?? new ArmHealthModelsClient(resourceClient);
   }
 
   filterQuery(query: AzureMonitorQuery): boolean {
@@ -75,13 +78,8 @@ export default class AzureHealthModelsDatasource extends DataSourceWithBackend<
     );
   }
 
-  async getHealthModels(subscriptionId: string): Promise<HealthModel[]> {
-    const collectionPath = `/subscriptions/${subscriptionId}/providers/Microsoft.CloudHealth/healthmodels`;
-    return fetchAllArmPages<HealthModel>(
-      this.resourcePath,
-      `${this.resourcePath}${collectionPath}?api-version=${HEALTH_MODELS_API_VERSION}`,
-      (path) => this.getResource<ArmListResponse<HealthModel>>(path)
-    );
+  getHealthModels(subscriptionId: string): Promise<HealthModel[]> {
+    return this.healthModelsClient.listHealthModels(subscriptionId);
   }
 
   private async loadFrames(targets: AzureMonitorQuery[], range: HealthModelTimeRange): Promise<DataFrame[]> {
@@ -98,13 +96,13 @@ export default class AzureHealthModelsDatasource extends DataSourceWithBackend<
         }
 
         if (target.azureHealthModels?.resultFormat === 'timeSeries') {
-          const entities = await this.listCollection<HealthModelEntity>(`${healthModelId}/entities`, range.to);
+          const entities = await this.healthModelsClient.listEntities(healthModelId, range.to);
           return this.loadEntityHistoryFrames(target.refId, healthModelId, entities, range);
         }
 
         const [entities, relationships] = await Promise.all([
-          this.listCollection<HealthModelEntity>(`${healthModelId}/entities`, range.to),
-          this.listCollection<HealthModelRelationship>(`${healthModelId}/relationships`, range.to),
+          this.healthModelsClient.listEntities(healthModelId, range.to),
+          this.healthModelsClient.listRelationships(healthModelId, range.to),
         ]);
 
         return nodeGraphFrames(target.refId, entities, relationships);
@@ -127,7 +125,7 @@ export default class AzureHealthModelsDatasource extends DataSourceWithBackend<
       frames.push(
         ...(await Promise.all(
           entityBatch.map(async (entity) => {
-            const history = await this.getEntityHistory(healthModelId, entity.name, range);
+            const history = await this.healthModelsClient.getEntityHistory(healthModelId, entity.name, range);
             return entityHistoryFrame(refId, entity, history, range);
           })
         ))
@@ -136,51 +134,6 @@ export default class AzureHealthModelsDatasource extends DataSourceWithBackend<
 
     return frames;
   }
-
-  private async getEntityHistory(
-    healthModelId: string,
-    entityName: string,
-    range: HealthModelTimeRange
-  ): Promise<HealthModelEntityHistoryTransition[]> {
-    const query = new URLSearchParams({ 'api-version': HEALTH_MODELS_API_VERSION });
-    const path = `${this.resourcePath}${healthModelId}/entities/${encodeURIComponent(entityName)}/getHistory?${query.toString()}`;
-    let response = await this.postResource<HealthModelEntityHistoryResponse>(path, {
-      startAt: range.from,
-      endAt: range.to,
-      top: ENTITY_HISTORY_PAGE_SIZE,
-    });
-    const history = [...response.history];
-    const seenMarkers = new Set<string>();
-
-    while (response.nextMarker) {
-      if (seenMarkers.has(response.nextMarker)) {
-        throw new Error(`Entity history pagination returned the same marker more than once for "${entityName}".`);
-      }
-      seenMarkers.add(response.nextMarker);
-      response = await this.postResource<HealthModelEntityHistoryResponse>(path, {
-        nextMarker: response.nextMarker,
-        top: ENTITY_HISTORY_PAGE_SIZE,
-      });
-      history.push(...response.history);
-    }
-
-    return history;
-  }
-
-  private listCollection<T>(collectionPath: string, timestamp: string): Promise<T[]> {
-    const query = new URLSearchParams({
-      'api-version': HEALTH_MODELS_API_VERSION,
-      timestamp,
-    });
-    return fetchAllArmPages<T>(this.resourcePath, `${this.resourcePath}${collectionPath}?${query.toString()}`, (path) =>
-      this.getResource<ArmListResponse<T>>(path)
-    );
-  }
-}
-
-interface HealthModelTimeRange {
-  from: string;
-  to: string;
 }
 
 export function parseHealthModelResourceId(healthModelId: string): HealthModelResourceId {
