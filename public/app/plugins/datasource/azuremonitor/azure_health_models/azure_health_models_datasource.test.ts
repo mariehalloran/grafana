@@ -147,7 +147,6 @@ describe('AzureHealthModelsDatasource', () => {
             Degraded: { text: 'Degraded', color: 'orange' },
             Unhealthy: { text: 'Unhealthy', color: 'red' },
             Unknown: { text: 'Unknown', color: 'gray' },
-            Deleted: { text: 'Deleted', color: 'gray' },
           },
         },
       ],
@@ -161,7 +160,7 @@ describe('AzureHealthModelsDatasource', () => {
     // with a non-null assertion, so the wrong shape crashes them rather than degrading.
     expect(
       response.data[0].fields.find((field: Field) => field.name === 'healthStateValue')?.config.type?.enum?.text
-    ).toEqual(['Healthy', 'Degraded', 'Unhealthy', 'Unknown', 'Deleted']);
+    ).toEqual(['Healthy', 'Degraded', 'Unhealthy', 'Unknown']);
     expect(entityField('signalsTotal')).toBe(2);
     expect(entityField('signalsHealthy')).toBe(1);
     expect(entityField('availabilityState')).toBe('Available');
@@ -253,10 +252,7 @@ describe('AzureHealthModelsDatasource', () => {
     expect(response.data).toHaveLength(1);
     const frame = response.data[0];
     expect(frame.name).toBe('entity-one');
-    expect(frame.meta).toMatchObject({
-      preferredVisualisationType: 'graph',
-      preferredVisualisationPluginId: 'state-timeline',
-    });
+    expect(frame.meta).toBeUndefined();
     expect(frame.fields[0]).toMatchObject({
       name: 'Time',
       type: FieldType.time,
@@ -275,8 +271,8 @@ describe('AzureHealthModelsDatasource', () => {
         },
         type: {
           enum: {
-            text: ['Healthy', 'Degraded', 'Unhealthy', 'Unknown', 'Deleted'],
-            color: ['green', 'orange', 'red', 'gray', 'gray'],
+            text: ['Healthy', 'Degraded', 'Unhealthy', 'Unknown'],
+            color: ['green', 'orange', 'red', 'gray'],
           },
         },
       },

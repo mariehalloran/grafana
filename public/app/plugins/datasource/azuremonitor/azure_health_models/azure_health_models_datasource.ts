@@ -253,8 +253,8 @@ function healthModelFrame(refId: string, healthModel: HealthModel): DataFrame {
  * Health states in a fixed order, so the enum field's numeric values are stable. The order runs
  * healthiest to least healthy, which is also a sensible sort order in a table.
  */
-const HEALTH_STATES = ['Healthy', 'Degraded', 'Unhealthy', 'Unknown', 'Deleted'];
-const HEALTH_STATE_TEXT_COLORS = ['green', 'orange', 'red', 'gray', 'gray'];
+const HEALTH_STATES = ['Healthy', 'Degraded', 'Unhealthy', 'Unknown'];
+const HEALTH_STATE_TEXT_COLORS = ['green', 'orange', 'red', 'gray'];
 
 function healthStateValue(healthState?: string): number {
   const index = HEALTH_STATES.indexOf(healthState ?? 'Unknown');
@@ -307,10 +307,6 @@ function entityHistoryFrame(
   return toDataFrame({
     name: entity.name,
     refId,
-    meta: {
-      preferredVisualisationType: 'graph',
-      preferredVisualisationPluginId: 'state-timeline',
-    },
     fields: [
       {
         name: 'Time',
@@ -377,7 +373,6 @@ function entitiesFrame(refId: string, entities: HealthModelEntity[]): DataFrame 
                 Degraded: { text: 'Degraded', color: 'orange' },
                 Unhealthy: { text: 'Unhealthy', color: 'red' },
                 Unknown: { text: 'Unknown', color: 'gray' },
-                Deleted: { text: 'Deleted', color: 'gray' },
               },
             },
           ],
