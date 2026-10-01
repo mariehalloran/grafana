@@ -2,14 +2,11 @@ export const HEALTH_MODELS_API_VERSION = '2026-09-01-preview';
 
 export interface AzureHealthModelsOptions {
   healthModelId?: string;
-  /**
-   * Which view of the model to return. Defaults to `entities` so an existing query keeps its
-   * current behaviour.
-   */
+  /** Which view of the model to return. Defaults to `modelGraph`. */
   resultFormat?: HealthModelsResultFormat;
 }
 
-export type HealthModelsResultFormat = 'entities' | 'modelGraph' | 'timeSeries';
+export type HealthModelsResultFormat = 'modelGraph' | 'timeSeries';
 
 export interface HealthModelResourceId {
   subscriptionId: string;

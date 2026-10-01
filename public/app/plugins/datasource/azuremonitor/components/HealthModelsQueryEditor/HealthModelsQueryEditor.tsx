@@ -26,11 +26,6 @@ const HEALTH_MODELS_ERROR_SOURCE = 'health-models-list';
 
 const RESULT_FORMAT_OPTIONS: Array<ComboboxOption<HealthModelsResultFormat>> = [
   {
-    label: 'Health Model Entities',
-    value: 'entities',
-    description: 'Point-in-time entity health at the end of the selected time range, as a table.',
-  },
-  {
     label: 'Health Model Graph',
     value: 'modelGraph',
     description:
@@ -220,7 +215,7 @@ const HealthModelsQueryEditor = ({
               <Combobox
                 aria-label={t('components.health-models-query-editor.aria-label-format', 'Result format')}
                 options={RESULT_FORMAT_OPTIONS}
-                value={query.azureHealthModels?.resultFormat ?? 'entities'}
+                value={query.azureHealthModels?.resultFormat === 'timeSeries' ? 'timeSeries' : 'modelGraph'}
                 onChange={onResultFormatChange}
                 disabled={!selectedHealthModelId}
                 width={24}

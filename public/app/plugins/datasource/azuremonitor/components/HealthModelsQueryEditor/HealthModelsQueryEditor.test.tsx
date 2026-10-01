@@ -119,7 +119,7 @@ describe('HealthModelsQueryEditor', () => {
     const onChange = jest.fn();
     const query = createMockHealthModelsQuery({
       subscription: subscriptionId,
-      azureHealthModels: { healthModelId, resultFormat: 'entities' },
+      azureHealthModels: { healthModelId, resultFormat: 'modelGraph' },
     });
 
     render(
@@ -134,12 +134,10 @@ describe('HealthModelsQueryEditor', () => {
 
     const resultFormatSelect = screen.getByLabelText('Result format');
     await userEvent.click(resultFormatSelect);
-    expect(await screen.findByRole('option', { name: /Health Model Entities/ })).toHaveTextContent(
-      'Point-in-time entity health at the end of the selected time range, as a table.'
-    );
-    expect(screen.getByRole('option', { name: /Health Model Graph/ })).toHaveTextContent(
+    expect(await screen.findByRole('option', { name: /Health Model Graph/ })).toHaveTextContent(
       'Point-in-time entity health and relationships at the end of the selected time range, for the Node graph panel.'
     );
+    expect(screen.queryByRole('option', { name: /Health Model Entities/ })).not.toBeInTheDocument();
     await userEvent.click(await screen.findByRole('option', { name: /Health Model Entity History/ }));
 
     expect(onChange).toHaveBeenLastCalledWith({

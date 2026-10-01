@@ -8,12 +8,11 @@ import {
   type DataSourceInstanceSettings,
   FieldType,
   LoadingState,
-  MappingType,
   type ScopedVars,
   toDataFrame,
 } from '@grafana/data';
 import { DataSourceWithBackend, getTemplateSrv, type TemplateSrv } from '@grafana/runtime';
-import { GraphDrawStyle, LineInterpolation, TableCellDisplayMode } from '@grafana/schema';
+import { GraphDrawStyle, LineInterpolation } from '@grafana/schema';
 
 import { type AzureMonitorQuery } from '../types/query';
 import { type AzureMonitorDataSourceJsonData } from '../types/types';
@@ -103,25 +102,12 @@ export default class AzureHealthModelsDatasource extends DataSourceWithBackend<
           return this.loadEntityHistoryFrames(target.refId, healthModelId, entities, range);
         }
 
-        const [healthModel, entities, relationships] = await Promise.all([
-          this.getResource<HealthModel>(`${this.resourcePath}${healthModelId}`, {
-            'api-version': HEALTH_MODELS_API_VERSION,
-          }),
+        const [entities, relationships] = await Promise.all([
           this.listCollection<HealthModelEntity>(`${healthModelId}/entities`, range.to),
           this.listCollection<HealthModelRelationship>(`${healthModelId}/relationships`, range.to),
         ]);
 
-        if (target.azureHealthModels?.resultFormat === 'modelGraph') {
-          // Node Graph needs nodes and edges together and nothing else, so a mixed response would
-          // just be ignored.
-          return nodeGraphFrames(target.refId, entities, relationships);
-        }
-
-        return [
-          entitiesFrame(target.refId, entities),
-          healthModelFrame(target.refId, healthModel),
-          relationshipsFrame(target.refId, relationships),
-        ];
+        return nodeGraphFrames(target.refId, entities, relationships);
       })
     );
 
@@ -227,32 +213,7 @@ export function parseHealthModelResourceId(healthModelId: string): HealthModelRe
   };
 }
 
-function healthModelFrame(refId: string, healthModel: HealthModel): DataFrame {
-  return toDataFrame({
-    name: 'Health Model',
-    refId,
-    fields: [
-      { name: 'id', type: FieldType.string, values: [healthModel.id] },
-      { name: 'name', type: FieldType.string, values: [healthModel.name] },
-      { name: 'location', type: FieldType.string, values: [healthModel.location] },
-      {
-        name: 'provisioningState',
-        type: FieldType.string,
-        values: [healthModel.properties?.provisioningState],
-      },
-      {
-        name: 'tags',
-        type: FieldType.string,
-        values: [healthModel.tags ? JSON.stringify(healthModel.tags) : undefined],
-      },
-    ],
-  });
-}
-
-/**
- * Health states in a fixed order, so the enum field's numeric values are stable. The order runs
- * healthiest to least healthy, which is also a sensible sort order in a table.
- */
+/** Health states in a fixed order so the enum field's numeric values are stable. */
 const HEALTH_STATES = ['Healthy', 'Degraded', 'Unhealthy', 'Unknown'];
 const HEALTH_STATE_TEXT_COLORS = ['green', 'orange', 'red', 'gray'];
 
@@ -326,114 +287,6 @@ function entityHistoryFrame(
           },
           type: { enum: { text: HEALTH_STATES, color: HEALTH_STATE_TEXT_COLORS } },
         },
-      },
-    ],
-  });
-}
-
-function entitiesFrame(refId: string, entities: HealthModelEntity[]): DataFrame {
-  const metrics = entities.map((entity) => getEntityHealthMetrics(entity));
-
-  return toDataFrame({
-    name: 'Entities',
-    refId,
-    meta: {
-      preferredVisualisationType: 'table',
-    },
-    fields: [
-      {
-        // Relationships reference entities by `name`, not `displayName`, and `displayName` is not
-        // unique within a model. Keeping `name` on the frame is what lets the two be joined, for
-        // example to drive a node graph. It is hidden so the default table stays readable.
-        name: 'name',
-        type: FieldType.string,
-        values: entities.map((entity) => entity.name),
-        config: { custom: { hidden: true } },
-      },
-      {
-        name: 'displayName',
-        type: FieldType.string,
-        values: entities.map((entity) => entity.properties?.displayName),
-      },
-      {
-        name: 'healthState',
-        type: FieldType.string,
-        values: entities.map((entity) => entity.properties?.healthState),
-        config: {
-          custom: {
-            cellOptions: {
-              type: TableCellDisplayMode.ColorText,
-            },
-          },
-          mappings: [
-            {
-              type: MappingType.ValueToText,
-              options: {
-                Healthy: { text: 'Healthy', color: 'green' },
-                Degraded: { text: 'Degraded', color: 'orange' },
-                Unhealthy: { text: 'Unhealthy', color: 'red' },
-                Unknown: { text: 'Unknown', color: 'gray' },
-              },
-            },
-          ],
-        },
-      },
-      {
-        // The string state above is only usable by the table. This enum carries the same value as
-        // a number with its own text and colours, which is what Stat, Gauge, Bar gauge and Pie
-        // chart need in order to show health at all. Hidden so the table does not show it twice.
-        name: 'healthStateValue',
-        type: FieldType.enum,
-        values: entities.map((entity) => healthStateValue(entity.properties?.healthState)),
-        config: {
-          displayName: 'Health state',
-          custom: { hidden: true },
-          type: { enum: { text: HEALTH_STATES, color: HEALTH_STATE_TEXT_COLORS } },
-        },
-      },
-      {
-        name: 'signalsHealthy',
-        type: FieldType.number,
-        values: metrics.map(
-          (metric) => metric.signals.filter((signal) => signal.healthState?.toLowerCase() === 'healthy').length
-        ),
-        config: { displayName: 'Healthy signals' },
-      },
-      {
-        name: 'signalsTotal',
-        type: FieldType.number,
-        values: metrics.map((metric) => metric.signals.length),
-        config: { displayName: 'Total signals' },
-      },
-      {
-        name: 'availabilityState',
-        type: FieldType.string,
-        values: metrics.map((metric) => metric.availabilityState ?? null),
-        config: { displayName: 'Availability' },
-      },
-      {
-        name: 'alertSeverities',
-        type: FieldType.string,
-        values: metrics.map((metric) => (metric.alertSeverities.length ? metric.alertSeverities.join(', ') : null)),
-        config: { displayName: 'Alerts' },
-      },
-      {
-        name: 'impact',
-        type: FieldType.string,
-        values: entities.map((entity) => entity.properties?.impact ?? null),
-        config: { displayName: 'Impact' },
-      },
-      {
-        name: 'healthObjective',
-        type: FieldType.number,
-        values: entities.map((entity) => entity.properties?.healthObjective ?? null),
-        config: { displayName: 'Health objective', unit: 'percent' },
-      },
-      {
-        name: 'provisioningState',
-        type: FieldType.string,
-        values: entities.map((entity) => entity.properties?.provisioningState ?? null),
-        config: { displayName: 'Provisioning state' },
       },
     ],
   });
@@ -546,42 +399,4 @@ function nodeGraphFrames(
   });
 
   return [nodes, edgeFrame];
-}
-
-function relationshipsFrame(refId: string, relationships: HealthModelRelationship[]): DataFrame {
-  return toDataFrame({
-    name: 'Relationships',
-    refId,
-    fields: [
-      { name: 'id', type: FieldType.string, values: relationships.map((relationship) => relationship.id) },
-      { name: 'name', type: FieldType.string, values: relationships.map((relationship) => relationship.name) },
-      {
-        name: 'displayName',
-        type: FieldType.string,
-        values: relationships.map((relationship) => relationship.properties?.displayName),
-      },
-      {
-        name: 'parentEntityName',
-        type: FieldType.string,
-        values: relationships.map((relationship) => relationship.properties?.parentEntityName),
-      },
-      {
-        name: 'childEntityName',
-        type: FieldType.string,
-        values: relationships.map((relationship) => relationship.properties?.childEntityName),
-      },
-      {
-        name: 'provisioningState',
-        type: FieldType.string,
-        values: relationships.map((relationship) => relationship.properties?.provisioningState),
-      },
-      {
-        name: 'tags',
-        type: FieldType.string,
-        values: relationships.map((relationship) =>
-          relationship.properties?.tags ? JSON.stringify(relationship.properties.tags) : undefined
-        ),
-      },
-    ],
-  });
 }

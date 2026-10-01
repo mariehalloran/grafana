@@ -1,7 +1,7 @@
 import { lastValueFrom } from 'rxjs';
 
-import { type DataQueryRequest, dateTime, type Field, FieldType, MappingType } from '@grafana/data';
-import { GraphDrawStyle, LineInterpolation, TableCellDisplayMode } from '@grafana/schema';
+import { type DataQueryRequest, dateTime, type Field, FieldType } from '@grafana/data';
+import { GraphDrawStyle, LineInterpolation } from '@grafana/schema';
 
 import { AzureQueryType } from '../dataquery.gen';
 import { createMockInstanceSetttings } from '../mocks/instanceSettings';
@@ -38,143 +38,6 @@ describe('AzureHealthModelsDatasource', () => {
     expect(models).toHaveLength(1);
     expect(getResource).toHaveBeenCalledWith(
       `azuremonitor/subscriptions/${subscriptionId}/providers/Microsoft.CloudHealth/healthmodels?api-version=${HEALTH_MODELS_API_VERSION}`
-    );
-  });
-
-  it('returns model, entity, and relationship frames at the end of the query time range', async () => {
-    const datasource = new AzureHealthModelsDatasource(createMockInstanceSetttings());
-    const getResource = jest.spyOn(datasource, 'getResource').mockImplementation(async (path) => {
-      if (path === `azuremonitor${healthModelId}`) {
-        return {
-          id: healthModelId,
-          name: 'model-one',
-          type: 'Microsoft.CloudHealth/healthmodels',
-          location: 'centralus',
-          properties: { provisioningState: 'Succeeded' },
-        };
-      }
-      if (path.includes('/entities?')) {
-        return {
-          value: [
-            {
-              id: `${healthModelId}/entities/entity-one`,
-              name: 'entity-one',
-              type: 'Microsoft.CloudHealth/healthmodels/entities',
-              properties: {
-                displayName: 'Entity One',
-                healthState: 'Healthy',
-                impact: 'Standard',
-                signalGroups: {
-                  azureResource: {
-                    resourceHealth: {
-                      status: {
-                        healthState: 'Healthy',
-                        availabilityState: 'Available',
-                        reportedAt: '2026-01-01T00:00:00Z',
-                      },
-                    },
-                  },
-                  azureLogAnalytics: {
-                    signals: [
-                      { name: 'error-rate', status: { healthState: 'Degraded', reportedAt: '2026-01-01T01:00:00Z' } },
-                    ],
-                  },
-                },
-                alerts: { 'alert-one': { severity: 'Sev1' } },
-              },
-            },
-          ],
-        };
-      }
-      if (path.includes('/relationships?')) {
-        return {
-          value: [
-            {
-              id: `${healthModelId}/relationships/relationship-one`,
-              name: 'relationship-one',
-              type: 'Microsoft.CloudHealth/healthmodels/relationships',
-              properties: { parentEntityName: 'entity-one', childEntityName: 'entity-two' },
-            },
-          ],
-        };
-      }
-      throw new Error(`Unexpected resource path: ${path}`);
-    });
-    const query = createMockQuery({
-      queryType: AzureQueryType.AzureHealthModels,
-      subscription: subscriptionId,
-      azureHealthModels: { healthModelId },
-    });
-
-    const response = await lastValueFrom(
-      datasource.query({
-        targets: [query],
-        range: queryRange,
-      } as DataQueryRequest<AzureMonitorQuery>)
-    );
-
-    expect(response.data.map((frame) => frame.name)).toEqual(['Entities', 'Health Model', 'Relationships']);
-    expect(response.data.map((frame) => frame.length)).toEqual([1, 1, 1]);
-    expect(response.data[0].meta?.preferredVisualisationType).toBe('table');
-    expect(response.data[0].fields.map((field: Field) => field.name)).toEqual([
-      'name',
-      'displayName',
-      'healthState',
-      'healthStateValue',
-      'signalsHealthy',
-      'signalsTotal',
-      'availabilityState',
-      'alertSeverities',
-      'impact',
-      'healthObjective',
-      'provisioningState',
-    ]);
-    // `name` is the key relationships reference, so it must be present, but it is hidden to keep
-    // the default table readable.
-    expect(response.data[0].fields[0].values).toEqual(['entity-one']);
-    expect(response.data[0].fields[0].config).toEqual({ custom: { hidden: true } });
-    expect(response.data[0].fields.find((field: Field) => field.name === 'healthState')?.config).toEqual({
-      custom: {
-        cellOptions: {
-          type: TableCellDisplayMode.ColorText,
-        },
-      },
-      mappings: [
-        {
-          type: MappingType.ValueToText,
-          options: {
-            Healthy: { text: 'Healthy', color: 'green' },
-            Degraded: { text: 'Degraded', color: 'orange' },
-            Unhealthy: { text: 'Unhealthy', color: 'red' },
-            Unknown: { text: 'Unknown', color: 'gray' },
-          },
-        },
-      ],
-    });
-    // The health telemetry is nested inside `signalGroups` at inconsistent depths, so prove it is
-    // actually extracted rather than just present as columns.
-    const entityField = (name: string) =>
-      response.data[0].fields.find((field: Field) => field.name === name)?.values[0];
-    expect(entityField('healthStateValue')).toBe(0); // Healthy
-    // Enum text/colour must live under `config.type.enum`; panels such as Time series read it
-    // with a non-null assertion, so the wrong shape crashes them rather than degrading.
-    expect(
-      response.data[0].fields.find((field: Field) => field.name === 'healthStateValue')?.config.type?.enum?.text
-    ).toEqual(['Healthy', 'Degraded', 'Unhealthy', 'Unknown']);
-    expect(entityField('signalsTotal')).toBe(2);
-    expect(entityField('signalsHealthy')).toBe(1);
-    expect(entityField('availabilityState')).toBe('Available');
-    expect(entityField('alertSeverities')).toBe('Sev1');
-    expect(entityField('impact')).toBe('Standard');
-
-    expect(getResource).toHaveBeenCalledWith(`azuremonitor${healthModelId}`, {
-      'api-version': HEALTH_MODELS_API_VERSION,
-    });
-    expect(getResource).toHaveBeenCalledWith(
-      `azuremonitor${healthModelId}/entities?api-version=${HEALTH_MODELS_API_VERSION}&timestamp=${queryTimestamp}`
-    );
-    expect(getResource).toHaveBeenCalledWith(
-      `azuremonitor${healthModelId}/relationships?api-version=${HEALTH_MODELS_API_VERSION}&timestamp=${queryTimestamp}`
     );
   });
 
@@ -343,9 +206,9 @@ describe('AzureHealthModelsDatasource', () => {
       )
     ).toThrow('not a valid Microsoft.CloudHealth Health Model resource ID');
   });
-  it('returns node graph frames when the model graph format is selected', async () => {
+  it('returns node graph frames by default', async () => {
     const datasource = new AzureHealthModelsDatasource(createMockInstanceSetttings());
-    jest.spyOn(datasource, 'getResource').mockImplementation(async (path: string) => {
+    const getResource = jest.spyOn(datasource, 'getResource').mockImplementation(async (path: string) => {
       if (path.includes('/entities?')) {
         return {
           value: [
@@ -378,13 +241,13 @@ describe('AzureHealthModelsDatasource', () => {
           ],
         };
       }
-      return { id: healthModelId, name: 'model-one', type: 't' };
+      throw new Error(`Unexpected resource path: ${path}`);
     });
 
     const query = createMockQuery({
       queryType: AzureQueryType.AzureHealthModels,
       subscription: subscriptionId,
-      azureHealthModels: { healthModelId, resultFormat: 'modelGraph' },
+      azureHealthModels: { healthModelId },
     });
 
     const response = await lastValueFrom(
@@ -403,5 +266,12 @@ describe('AzureHealthModelsDatasource', () => {
     const edgeField = (name: string) => response.data[1].fields.find((field: Field) => field.name === name)?.values;
     expect(edgeField('source')).toEqual(['parent-entity']);
     expect(edgeField('target')).toEqual(['child-entity']);
+    expect(getResource).toHaveBeenCalledTimes(2);
+    expect(getResource).toHaveBeenCalledWith(
+      `azuremonitor${healthModelId}/entities?api-version=${HEALTH_MODELS_API_VERSION}&timestamp=${queryTimestamp}`
+    );
+    expect(getResource).toHaveBeenCalledWith(
+      `azuremonitor${healthModelId}/relationships?api-version=${HEALTH_MODELS_API_VERSION}&timestamp=${queryTimestamp}`
+    );
   });
 });
