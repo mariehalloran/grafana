@@ -164,7 +164,7 @@ describe('Azure Monitor QueryEditor', () => {
     );
   });
 
-  it('renders the Health Models editor when the service is Azure Health Models', async () => {
+  it('renders the Health Models editor when the service is Azure Monitor Health Models', async () => {
     const mockDatasource = createMockDatasource();
     const mockQuery = {
       ...createMockQuery(),

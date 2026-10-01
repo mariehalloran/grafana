@@ -75,14 +75,14 @@ describe('Azure Monitor QueryHeader', () => {
     );
   });
 
-  it('offers Azure Health Models as a dashboard service', async () => {
+  it('offers Azure Monitor Health Models as a dashboard service', async () => {
     const query = createMockQuery();
     const onQueryChange = jest.fn();
 
     renderComponent(query, { app: CoreApp.Dashboard, onQueryChange });
 
     const serviceSelect = await screen.findByLabelText(/Service/i);
-    await selectOptionInTest(serviceSelect, 'Azure Health Models');
+    await selectOptionInTest(serviceSelect, 'Azure Monitor Health Models');
 
     expect(onQueryChange).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -92,7 +92,7 @@ describe('Azure Monitor QueryHeader', () => {
     );
   });
 
-  it('places Azure Health Models immediately after Azure Resource Graph', async () => {
+  it('places Azure Monitor Health Models immediately after Azure Resource Graph', async () => {
     const user = userEvent.setup();
     const query = createMockQuery();
 
@@ -102,7 +102,7 @@ describe('Azure Monitor QueryHeader', () => {
     const options = await screen.findAllByRole('option');
     const optionLabels = options.map((option) => option.textContent);
 
-    expect(optionLabels.indexOf('Azure Health Models')).toBe(optionLabels.indexOf('Azure Resource Graph') + 1);
+    expect(optionLabels.indexOf('Azure Monitor Health Models')).toBe(optionLabels.indexOf('Azure Resource Graph') + 1);
   });
 
   it('initializes logs editor mode to Raw when a raw query exists and builder is enabled', async () => {

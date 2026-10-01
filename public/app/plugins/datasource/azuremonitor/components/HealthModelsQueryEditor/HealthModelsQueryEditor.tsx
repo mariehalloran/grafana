@@ -186,7 +186,7 @@ const HealthModelsQueryEditor = ({
               <Combobox
                 aria-label={t(
                   'components.health-models-query-editor.aria-label-subscription',
-                  'Health Models subscription'
+                  'Azure Monitor Health Models subscription'
                 )}
                 options={subscriptionOptions}
                 value={selectedSubscription}
@@ -201,7 +201,10 @@ const HealthModelsQueryEditor = ({
               data-testid={selectors.components.queryEditor.healthModelsQueryEditor.healthModel.input}
             >
               <Combobox
-                aria-label={t('components.health-models-query-editor.aria-label-health-model', 'Azure Health Model')}
+                aria-label={t(
+                  'components.health-models-query-editor.aria-label-health-model',
+                  'Azure Monitor Health Model'
+                )}
                 options={healthModelOptions}
                 value={selectedHealthModelId}
                 onChange={onHealthModelChange}

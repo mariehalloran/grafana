@@ -45,7 +45,7 @@ export const QueryHeader = ({
     { value: AzureQueryType.AzureTraces, label: 'Traces' },
     { value: AzureQueryType.AzureResourceGraph, label: 'Azure Resource Graph' },
     ...(app !== CoreApp.UnifiedAlerting && app !== CoreApp.CloudAlerting
-      ? [{ value: AzureQueryType.AzureHealthModels, label: 'Azure Health Models' }]
+      ? [{ value: AzureQueryType.AzureHealthModels, label: 'Azure Monitor Health Models' }]
       : []),
   ];
 

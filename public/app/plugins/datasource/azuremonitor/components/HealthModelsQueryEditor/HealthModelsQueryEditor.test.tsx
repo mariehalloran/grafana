@@ -55,7 +55,7 @@ describe('HealthModelsQueryEditor', () => {
       expect(datasource.azureHealthModelsDatasource.getHealthModels).toHaveBeenCalledWith(subscriptionId)
     );
 
-    const healthModelSelect = await screen.findByLabelText('Azure Health Model');
+    const healthModelSelect = await screen.findByLabelText('Azure Monitor Health Model');
     await userEvent.click(healthModelSelect);
     await userEvent.click(await screen.findByRole('option', { name: /model-one \(rg-one\)/ }));
 
@@ -95,7 +95,7 @@ describe('HealthModelsQueryEditor', () => {
       />
     );
 
-    const subscriptionSelect = await screen.findByLabelText('Health Models subscription');
+    const subscriptionSelect = await screen.findByLabelText('Azure Monitor Health Models subscription');
     await userEvent.click(subscriptionSelect);
     await userEvent.click(await screen.findByRole('option', { name: /Subscription Two/ }));
 

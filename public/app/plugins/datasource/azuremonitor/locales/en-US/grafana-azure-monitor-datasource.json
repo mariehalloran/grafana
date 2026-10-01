@@ -169,8 +169,8 @@
     },
     "health-models-query-editor": {
       "aria-label-format": "Result format",
-      "aria-label-health-model": "Azure Health Model",
-      "aria-label-subscription": "Health Models subscription",
+      "aria-label-health-model": "Azure Monitor Health Model",
+      "aria-label-subscription": "Azure Monitor Health Models subscription",
       "label-format": "Format",
       "label-health-model": "Health Model",
       "label-subscription": "Subscription"

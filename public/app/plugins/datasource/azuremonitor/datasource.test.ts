@@ -72,7 +72,7 @@ describe('Azure Monitor Datasource', () => {
     expect(ds.filterQuery(query)).toBe(false);
   });
 
-  it('should not filter a selected Azure Health Model', () => {
+  it('should not filter a selected Azure Monitor Health Model', () => {
     const ds = new Datasource(createMockInstanceSetttings());
     const query = createMockQuery({
       queryType: AzureQueryType.AzureHealthModels,
@@ -81,7 +81,7 @@ describe('Azure Monitor Datasource', () => {
     expect(ds.filterQuery(query)).toBe(true);
   });
 
-  it('should filter an Azure Health Models selection with no model', () => {
+  it('should filter an Azure Monitor Health Models selection with no model', () => {
     const ds = new Datasource(createMockInstanceSetttings());
     const query = createMockQuery({
       queryType: AzureQueryType.AzureHealthModels,
