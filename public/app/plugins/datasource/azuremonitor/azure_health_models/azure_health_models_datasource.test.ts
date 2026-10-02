@@ -9,7 +9,7 @@ import createMockQuery from '../mocks/query';
 import { type AzureMonitorQuery } from '../types/query';
 
 import AzureHealthModelsDatasource, { parseHealthModelResourceId } from './azure_health_models_datasource';
-import { type HealthModelsClient } from './healthModelsClient';
+import { type HealthModelsControlPlaneClient, type HealthModelsEntityClient } from './healthModelsClient';
 import { HEALTH_MODELS_API_VERSION } from './types';
 
 const subscriptionId = '11111111-1111-1111-1111-111111111111';
@@ -21,11 +21,19 @@ const queryRange = {
 };
 const queryTimestamp = encodeURIComponent(queryRange.to.toISOString());
 
-function createMockHealthModelsClient(overrides: Partial<HealthModelsClient> = {}): HealthModelsClient {
+function createMockControlPlaneClient(
+  overrides: Partial<HealthModelsControlPlaneClient> = {}
+): HealthModelsControlPlaneClient {
   return {
     listHealthModels: jest.fn().mockResolvedValue([]),
-    listEntities: jest.fn().mockResolvedValue([]),
     listRelationships: jest.fn().mockResolvedValue([]),
+    ...overrides,
+  };
+}
+
+function createMockEntityClient(overrides: Partial<HealthModelsEntityClient> = {}): HealthModelsEntityClient {
+  return {
+    listEntities: jest.fn().mockResolvedValue([]),
     getEntityHistory: jest.fn().mockResolvedValue([]),
     ...overrides,
   };
@@ -70,8 +78,9 @@ describe('AzureHealthModelsDatasource', () => {
     ).rejects.toThrow('does not belong to the selected subscription');
   });
 
-  it('loads graph data through the configured plane-neutral client', async () => {
-    const healthModelsClient = createMockHealthModelsClient({
+  it('loads graph entity data and relationships through independently configured clients', async () => {
+    const controlPlaneClient = createMockControlPlaneClient();
+    const entityClient = createMockEntityClient({
       listEntities: jest.fn().mockResolvedValue([
         {
           id: `${healthModelId}/entities/entity-one`,
@@ -80,9 +89,11 @@ describe('AzureHealthModelsDatasource', () => {
           properties: { displayName: 'Entity One', healthState: 'Healthy' },
         },
       ]),
-      listRelationships: jest.fn().mockResolvedValue([]),
     });
-    const datasource = new AzureHealthModelsDatasource(createMockInstanceSetttings(), undefined, healthModelsClient);
+    const datasource = new AzureHealthModelsDatasource(createMockInstanceSetttings(), undefined, {
+      controlPlane: controlPlaneClient,
+      entityData: entityClient,
+    });
     const getResource = jest.spyOn(datasource, 'getResource');
     const query = createMockQuery({
       queryType: AzureQueryType.AzureHealthModels,
@@ -99,15 +110,57 @@ describe('AzureHealthModelsDatasource', () => {
 
     expect(response.data.map((frame) => frame.name)).toEqual(['nodes', 'edges']);
     expect(response.data[0].fields.find((field: Field) => field.name === 'title')?.values).toEqual(['Entity One']);
-    expect(jest.mocked(healthModelsClient.listEntities)).toHaveBeenCalledWith(
-      healthModelId,
-      '2026-01-02T03:04:05.000Z'
-    );
-    expect(jest.mocked(healthModelsClient.listRelationships)).toHaveBeenCalledWith(
+    expect(jest.mocked(entityClient.listEntities)).toHaveBeenCalledWith(healthModelId, '2026-01-02T03:04:05.000Z');
+    expect(jest.mocked(controlPlaneClient.listRelationships)).toHaveBeenCalledWith(
       healthModelId,
       '2026-01-02T03:04:05.000Z'
     );
     expect(getResource).not.toHaveBeenCalled();
+  });
+
+  it('loads timeline entities and history through the entity client without requesting relationships', async () => {
+    const controlPlaneClient = createMockControlPlaneClient();
+    const entityClient = createMockEntityClient({
+      listEntities: jest.fn().mockResolvedValue([
+        {
+          id: `${healthModelId}/entities/entity-one`,
+          name: 'entity-one',
+          type: 'Microsoft.CloudHealth/healthmodels/entities',
+          properties: { displayName: 'Entity One', healthState: 'Degraded' },
+        },
+      ]),
+      getEntityHistory: jest.fn().mockResolvedValue([
+        {
+          previousState: 'Healthy',
+          newState: 'Degraded',
+          occurredAt: '2026-01-01T01:00:00Z',
+        },
+      ]),
+    });
+    const datasource = new AzureHealthModelsDatasource(createMockInstanceSetttings(), undefined, {
+      controlPlane: controlPlaneClient,
+      entityData: entityClient,
+    });
+    const query = createMockQuery({
+      queryType: AzureQueryType.AzureHealthModels,
+      subscription: subscriptionId,
+      azureHealthModels: { healthModelId, resultFormat: 'timeSeries' },
+    });
+
+    const response = await lastValueFrom(
+      datasource.query({
+        targets: [query],
+        range: queryRange,
+      } as DataQueryRequest<AzureMonitorQuery>)
+    );
+
+    expect(response.data[0].fields.find((field: Field) => field.name === 'healthState')?.values).toEqual([0, 1, 1]);
+    expect(jest.mocked(entityClient.listEntities)).toHaveBeenCalledWith(healthModelId, '2026-01-02T03:04:05.000Z');
+    expect(jest.mocked(entityClient.getEntityHistory)).toHaveBeenCalledWith(healthModelId, 'entity-one', {
+      from: '2026-01-01T00:00:00.000Z',
+      to: '2026-01-02T03:04:05.000Z',
+    });
+    expect(controlPlaneClient.listRelationships).not.toHaveBeenCalled();
   });
 
   it('returns paginated entity history as stepwise time series over the query range', async () => {

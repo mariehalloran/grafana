@@ -18,14 +18,13 @@ export interface HealthModelsResourceClient {
   post<T>(path: string, body: Record<string, string | number>): Promise<T>;
 }
 
-/**
- * Plane-neutral operations used by query orchestration. Implementations own routing,
- * authentication, endpoint resolution, and wire-format pagination.
- */
-export interface HealthModelsClient {
+export interface HealthModelsControlPlaneClient {
   listHealthModels(subscriptionId: string): Promise<HealthModel[]>;
-  listEntities(healthModelId: string, timestamp: string): Promise<HealthModelEntity[]>;
   listRelationships(healthModelId: string, timestamp: string): Promise<HealthModelRelationship[]>;
+}
+
+export interface HealthModelsEntityClient {
+  listEntities(healthModelId: string, timestamp: string): Promise<HealthModelEntity[]>;
   getEntityHistory(
     healthModelId: string,
     entityName: string,
@@ -33,7 +32,12 @@ export interface HealthModelsClient {
   ): Promise<HealthModelEntityHistoryTransition[]>;
 }
 
-export class ArmHealthModelsClient implements HealthModelsClient {
+export interface HealthModelsClients {
+  controlPlane: HealthModelsControlPlaneClient;
+  entityData: HealthModelsEntityClient;
+}
+
+export class ArmHealthModelsClient implements HealthModelsControlPlaneClient, HealthModelsEntityClient {
   private readonly resourcePath = routeNames.azureMonitor;
 
   constructor(private readonly resourceClient: HealthModelsResourceClient) {}

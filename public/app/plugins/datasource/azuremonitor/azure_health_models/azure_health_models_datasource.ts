@@ -18,7 +18,7 @@ import { type AzureMonitorQuery } from '../types/query';
 import { type AzureMonitorDataSourceJsonData } from '../types/types';
 
 import { getEntityHealthMetrics } from './entityHealthMetrics';
-import { ArmHealthModelsClient, type HealthModelsClient, type HealthModelsResourceClient } from './healthModelsClient';
+import { ArmHealthModelsClient, type HealthModelsClients, type HealthModelsResourceClient } from './healthModelsClient';
 import {
   type HealthModel,
   type HealthModelEntity,
@@ -34,19 +34,23 @@ export default class AzureHealthModelsDatasource extends DataSourceWithBackend<
   AzureMonitorQuery,
   AzureMonitorDataSourceJsonData
 > {
-  private readonly healthModelsClient: HealthModelsClient;
+  private readonly healthModelsClients: HealthModelsClients;
 
   constructor(
     instanceSettings: DataSourceInstanceSettings<AzureMonitorDataSourceJsonData>,
     private readonly templateSrv: TemplateSrv = getTemplateSrv(),
-    healthModelsClient?: HealthModelsClient
+    healthModelsClients?: HealthModelsClients
   ) {
     super(instanceSettings);
     const resourceClient: HealthModelsResourceClient = {
       get: <T>(path: string) => this.getResource<T>(path),
       post: <T>(path: string, body: Record<string, string | number>) => this.postResource<T>(path, body),
     };
-    this.healthModelsClient = healthModelsClient ?? new ArmHealthModelsClient(resourceClient);
+    const armClient = new ArmHealthModelsClient(resourceClient);
+    this.healthModelsClients = healthModelsClients ?? {
+      controlPlane: armClient,
+      entityData: armClient,
+    };
   }
 
   filterQuery(query: AzureMonitorQuery): boolean {
@@ -79,7 +83,7 @@ export default class AzureHealthModelsDatasource extends DataSourceWithBackend<
   }
 
   getHealthModels(subscriptionId: string): Promise<HealthModel[]> {
-    return this.healthModelsClient.listHealthModels(subscriptionId);
+    return this.healthModelsClients.controlPlane.listHealthModels(subscriptionId);
   }
 
   private async loadFrames(targets: AzureMonitorQuery[], range: HealthModelTimeRange): Promise<DataFrame[]> {
@@ -96,13 +100,13 @@ export default class AzureHealthModelsDatasource extends DataSourceWithBackend<
         }
 
         if (target.azureHealthModels?.resultFormat === 'timeSeries') {
-          const entities = await this.healthModelsClient.listEntities(healthModelId, range.to);
+          const entities = await this.healthModelsClients.entityData.listEntities(healthModelId, range.to);
           return this.loadEntityHistoryFrames(target.refId, healthModelId, entities, range);
         }
 
         const [entities, relationships] = await Promise.all([
-          this.healthModelsClient.listEntities(healthModelId, range.to),
-          this.healthModelsClient.listRelationships(healthModelId, range.to),
+          this.healthModelsClients.entityData.listEntities(healthModelId, range.to),
+          this.healthModelsClients.controlPlane.listRelationships(healthModelId, range.to),
         ]);
 
         return nodeGraphFrames(target.refId, entities, relationships);
@@ -125,7 +129,11 @@ export default class AzureHealthModelsDatasource extends DataSourceWithBackend<
       frames.push(
         ...(await Promise.all(
           entityBatch.map(async (entity) => {
-            const history = await this.healthModelsClient.getEntityHistory(healthModelId, entity.name, range);
+            const history = await this.healthModelsClients.entityData.getEntityHistory(
+              healthModelId,
+              entity.name,
+              range
+            );
             return entityHistoryFrame(refId, entity, history, range);
           })
         ))
