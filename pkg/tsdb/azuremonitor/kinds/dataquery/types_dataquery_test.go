@@ -7,7 +7,7 @@ import (
 )
 
 func TestAzureMonitorQueryPreservesHealthModelsOptions(t *testing.T) {
-	input := []byte(`{"refId":"A","azureHealthModels":{"healthModelId":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.CloudHealth/healthmodels/model","resultFormat":"timeSeries"}}`)
+	input := []byte(`{"refId":"A","queryType":"Azure Monitor Health Models","azureHealthModels":{"healthModelResourceId":"/subscriptions/sub/resourceGroups/rg/providers/Microsoft.CloudHealth/healthmodels/model","resultFormat":"timeSeries"}}`)
 
 	var query AzureMonitorQuery
 	if err := json.Unmarshal(input, &query); err != nil {

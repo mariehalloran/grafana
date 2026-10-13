@@ -86,7 +86,7 @@ export const defaultAzureMonitorQuery: Partial<AzureMonitorQuery> = {
  * Defines the supported queryTypes. GrafanaTemplateVariableFn is deprecated
  */
 export enum AzureQueryType {
-  AzureHealthModels = 'Azure Health Models',
+  AzureHealthModels = 'Azure Monitor Health Models',
   AzureMonitor = 'Azure Monitor',
   AzureResourceGraph = 'Azure Resource Graph',
   AzureTraces = 'Azure Traces',
@@ -300,7 +300,7 @@ export interface AzureHealthModelsOptions {
   /**
    * Full ARM resource ID of the Health Model to query.
    */
-  healthModelId?: string;
+  healthModelResourceId?: string;
   /**
    * Specifies the Health Model view to return. Defaults to modelGraph.
    */

@@ -31,7 +31,7 @@ export default function createMockQuery(overrides?: Partial<AzureMonitorQuery>):
     },
 
     azureHealthModels: {
-      healthModelId:
+      healthModelResourceId:
         '/subscriptions/99999999-cccc-bbbb-aaaa-9106972f9572/resourceGroups/example/providers/Microsoft.CloudHealth/healthmodels/example',
       ...overrides?.azureHealthModels,
     },

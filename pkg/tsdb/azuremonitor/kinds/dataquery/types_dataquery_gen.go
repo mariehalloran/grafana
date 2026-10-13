@@ -476,7 +476,7 @@ func NewAzureTracesFilter() *AzureTracesFilter {
 
 type AzureHealthModelsOptions struct {
 	// Full ARM resource ID of the Health Model to query.
-	HealthModelId *string `json:"healthModelId,omitempty"`
+	HealthModelResourceId *string `json:"healthModelResourceId,omitempty"`
 	// Specifies the Health Model view to return. Defaults to modelGraph.
 	ResultFormat *HealthModelsResultFormat `json:"resultFormat,omitempty"`
 }
@@ -658,7 +658,7 @@ const (
 	AzureQueryTypeTraceExemplar             AzureQueryType = "traceql"
 	AzureQueryTypeCustomNamespacesQuery     AzureQueryType = "Azure Custom Namespaces"
 	AzureQueryTypeCustomMetricNamesQuery    AzureQueryType = "Azure Custom Metric Names"
-	AzureQueryTypeAzureHealthModels         AzureQueryType = "Azure Health Models"
+	AzureQueryTypeAzureHealthModels         AzureQueryType = "Azure Monitor Health Models"
 )
 
 type SelectableValue struct {

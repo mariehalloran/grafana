@@ -13,7 +13,7 @@ import { type HealthModelsControlPlaneClient, type HealthModelsEntityClient } fr
 import { HEALTH_MODELS_API_VERSION } from './types';
 
 const subscriptionId = '11111111-1111-1111-1111-111111111111';
-const healthModelId = `/subscriptions/${subscriptionId}/resourceGroups/rg-one/providers/Microsoft.CloudHealth/healthmodels/model-one`;
+const healthModelResourceId = `/subscriptions/${subscriptionId}/resourceGroups/rg-one/providers/Microsoft.CloudHealth/healthmodels/model-one`;
 const queryRange = {
   from: dateTime('2026-01-01T00:00:00Z'),
   to: dateTime('2026-01-02T03:04:05Z'),
@@ -45,7 +45,7 @@ describe('AzureHealthModelsDatasource', () => {
     const getResource = jest.spyOn(datasource, 'getResource').mockResolvedValue({
       value: [
         {
-          id: healthModelId,
+          id: healthModelResourceId,
           name: 'model-one',
           type: 'Microsoft.CloudHealth/healthmodels',
         },
@@ -65,7 +65,7 @@ describe('AzureHealthModelsDatasource', () => {
     const query = createMockQuery({
       queryType: AzureQueryType.AzureHealthModels,
       subscription: '22222222-2222-2222-2222-222222222222',
-      azureHealthModels: { healthModelId },
+      azureHealthModels: { healthModelResourceId },
     });
 
     await expect(
@@ -83,7 +83,7 @@ describe('AzureHealthModelsDatasource', () => {
     const entityClient = createMockEntityClient({
       listEntities: jest.fn().mockResolvedValue([
         {
-          id: `${healthModelId}/entities/entity-one`,
+          id: `${healthModelResourceId}/entities/entity-one`,
           name: 'entity-one',
           type: 'Microsoft.CloudHealth/healthmodels/entities',
           properties: { displayName: 'Entity One', healthState: 'Healthy' },
@@ -98,7 +98,7 @@ describe('AzureHealthModelsDatasource', () => {
     const query = createMockQuery({
       queryType: AzureQueryType.AzureHealthModels,
       subscription: subscriptionId,
-      azureHealthModels: { healthModelId },
+      azureHealthModels: { healthModelResourceId },
     });
 
     const response = await lastValueFrom(
@@ -110,9 +110,12 @@ describe('AzureHealthModelsDatasource', () => {
 
     expect(response.data.map((frame) => frame.name)).toEqual(['nodes', 'edges']);
     expect(response.data[0].fields.find((field: Field) => field.name === 'title')?.values).toEqual(['Entity One']);
-    expect(jest.mocked(entityClient.listEntities)).toHaveBeenCalledWith(healthModelId, '2026-01-02T03:04:05.000Z');
+    expect(jest.mocked(entityClient.listEntities)).toHaveBeenCalledWith(
+      healthModelResourceId,
+      '2026-01-02T03:04:05.000Z'
+    );
     expect(jest.mocked(controlPlaneClient.listRelationships)).toHaveBeenCalledWith(
-      healthModelId,
+      healthModelResourceId,
       '2026-01-02T03:04:05.000Z'
     );
     expect(getResource).not.toHaveBeenCalled();
@@ -123,7 +126,7 @@ describe('AzureHealthModelsDatasource', () => {
     const entityClient = createMockEntityClient({
       listEntities: jest.fn().mockResolvedValue([
         {
-          id: `${healthModelId}/entities/entity-one`,
+          id: `${healthModelResourceId}/entities/entity-one`,
           name: 'entity-one',
           type: 'Microsoft.CloudHealth/healthmodels/entities',
           properties: { displayName: 'Entity One', healthState: 'Degraded' },
@@ -144,7 +147,7 @@ describe('AzureHealthModelsDatasource', () => {
     const query = createMockQuery({
       queryType: AzureQueryType.AzureHealthModels,
       subscription: subscriptionId,
-      azureHealthModels: { healthModelId, resultFormat: 'timeSeries' },
+      azureHealthModels: { healthModelResourceId, resultFormat: 'timeSeries' },
     });
 
     const response = await lastValueFrom(
@@ -155,8 +158,11 @@ describe('AzureHealthModelsDatasource', () => {
     );
 
     expect(response.data[0].fields.find((field: Field) => field.name === 'healthState')?.values).toEqual([0, 1, 1]);
-    expect(jest.mocked(entityClient.listEntities)).toHaveBeenCalledWith(healthModelId, '2026-01-02T03:04:05.000Z');
-    expect(jest.mocked(entityClient.getEntityHistory)).toHaveBeenCalledWith(healthModelId, 'entity-one', {
+    expect(jest.mocked(entityClient.listEntities)).toHaveBeenCalledWith(
+      healthModelResourceId,
+      '2026-01-02T03:04:05.000Z'
+    );
+    expect(jest.mocked(entityClient.getEntityHistory)).toHaveBeenCalledWith(healthModelResourceId, 'entity-one', {
       from: '2026-01-01T00:00:00.000Z',
       to: '2026-01-02T03:04:05.000Z',
     });
@@ -168,7 +174,7 @@ describe('AzureHealthModelsDatasource', () => {
     const getResource = jest.spyOn(datasource, 'getResource').mockResolvedValue({
       value: [
         {
-          id: `${healthModelId}/entities/entity-one`,
+          id: `${healthModelResourceId}/entities/entity-one`,
           name: 'entity-one',
           type: 'Microsoft.CloudHealth/healthmodels/entities',
           properties: {
@@ -206,7 +212,7 @@ describe('AzureHealthModelsDatasource', () => {
     const query = createMockQuery({
       queryType: AzureQueryType.AzureHealthModels,
       subscription: subscriptionId,
-      azureHealthModels: { healthModelId, resultFormat: 'timeSeries' },
+      azureHealthModels: { healthModelResourceId, resultFormat: 'timeSeries' },
     });
 
     const response = await lastValueFrom(
@@ -246,9 +252,9 @@ describe('AzureHealthModelsDatasource', () => {
     });
     expect(getResource).toHaveBeenCalledTimes(1);
     expect(getResource).toHaveBeenCalledWith(
-      `azuremonitor${healthModelId}/entities?api-version=${HEALTH_MODELS_API_VERSION}&timestamp=${queryTimestamp}`
+      `azuremonitor${healthModelResourceId}/entities?api-version=${HEALTH_MODELS_API_VERSION}&timestamp=${queryTimestamp}`
     );
-    const historyPath = `azuremonitor${healthModelId}/entities/entity-one/getHistory?api-version=${HEALTH_MODELS_API_VERSION}`;
+    const historyPath = `azuremonitor${healthModelResourceId}/entities/entity-one/getHistory?api-version=${HEALTH_MODELS_API_VERSION}`;
     expect(postResource).toHaveBeenNthCalledWith(1, historyPath, {
       startAt: '2026-01-01T00:00:00.000Z',
       endAt: '2026-01-02T03:04:05.000Z',
@@ -265,7 +271,7 @@ describe('AzureHealthModelsDatasource', () => {
     jest.spyOn(datasource, 'getResource').mockResolvedValue({
       value: [
         {
-          id: `${healthModelId}/entities/entity-one`,
+          id: `${healthModelResourceId}/entities/entity-one`,
           name: 'entity-one',
           type: 'Microsoft.CloudHealth/healthmodels/entities',
           properties: {
@@ -281,7 +287,7 @@ describe('AzureHealthModelsDatasource', () => {
     const query = createMockQuery({
       queryType: AzureQueryType.AzureHealthModels,
       subscription: subscriptionId,
-      azureHealthModels: { healthModelId, resultFormat: 'timeSeries' },
+      azureHealthModels: { healthModelResourceId, resultFormat: 'timeSeries' },
     });
 
     const response = await lastValueFrom(
@@ -296,7 +302,7 @@ describe('AzureHealthModelsDatasource', () => {
   });
 
   it('parses a Microsoft.CloudHealth Health Model resource ID', () => {
-    expect(parseHealthModelResourceId(healthModelId)).toEqual({
+    expect(parseHealthModelResourceId(healthModelResourceId)).toEqual({
       subscriptionId,
       resourceGroupName: 'rg-one',
       healthModelName: 'model-one',
@@ -351,7 +357,7 @@ describe('AzureHealthModelsDatasource', () => {
     const query = createMockQuery({
       queryType: AzureQueryType.AzureHealthModels,
       subscription: subscriptionId,
-      azureHealthModels: { healthModelId },
+      azureHealthModels: { healthModelResourceId },
     });
 
     const response = await lastValueFrom(
@@ -372,10 +378,10 @@ describe('AzureHealthModelsDatasource', () => {
     expect(edgeField('target')).toEqual(['child-entity']);
     expect(getResource).toHaveBeenCalledTimes(2);
     expect(getResource).toHaveBeenCalledWith(
-      `azuremonitor${healthModelId}/entities?api-version=${HEALTH_MODELS_API_VERSION}&timestamp=${queryTimestamp}`
+      `azuremonitor${healthModelResourceId}/entities?api-version=${HEALTH_MODELS_API_VERSION}&timestamp=${queryTimestamp}`
     );
     expect(getResource).toHaveBeenCalledWith(
-      `azuremonitor${healthModelId}/relationships?api-version=${HEALTH_MODELS_API_VERSION}&timestamp=${queryTimestamp}`
+      `azuremonitor${healthModelResourceId}/relationships?api-version=${HEALTH_MODELS_API_VERSION}&timestamp=${queryTimestamp}`
     );
   });
 });

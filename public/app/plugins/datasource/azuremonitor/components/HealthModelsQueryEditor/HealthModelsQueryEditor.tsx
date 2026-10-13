@@ -51,7 +51,7 @@ const HealthModelsQueryEditor = ({
   const [loadingSubscriptions, setLoadingSubscriptions] = useState(false);
   const [loadingHealthModels, setLoadingHealthModels] = useState(false);
   const selectedSubscription = query.subscription || subscriptionId || subscriptions[0]?.value;
-  const selectedHealthModelId = query.azureHealthModels?.healthModelId;
+  const selectedHealthModelResourceId = query.azureHealthModels?.healthModelResourceId;
 
   useEffect(() => {
     let canceled = false;
@@ -148,7 +148,7 @@ const HealthModelsQueryEditor = ({
       subscription: selection.value,
       azureHealthModels: {
         ...query.azureHealthModels,
-        healthModelId: undefined,
+        healthModelResourceId: undefined,
       },
     });
   };
@@ -159,7 +159,7 @@ const HealthModelsQueryEditor = ({
       subscription: selectedSubscription,
       azureHealthModels: {
         ...query.azureHealthModels,
-        healthModelId: selection.value,
+        healthModelResourceId: selection.value,
       },
     });
   };
@@ -206,7 +206,7 @@ const HealthModelsQueryEditor = ({
                   'Azure Monitor Health Model'
                 )}
                 options={healthModelOptions}
-                value={selectedHealthModelId}
+                value={selectedHealthModelResourceId}
                 onChange={onHealthModelChange}
                 loading={loadingHealthModels}
                 disabled={!selectedSubscription}
@@ -220,7 +220,7 @@ const HealthModelsQueryEditor = ({
                 options={RESULT_FORMAT_OPTIONS}
                 value={query.azureHealthModels?.resultFormat === 'timeSeries' ? 'timeSeries' : 'modelGraph'}
                 onChange={onResultFormatChange}
-                disabled={!selectedHealthModelId}
+                disabled={!selectedHealthModelResourceId}
                 width={24}
               />
             </Field>

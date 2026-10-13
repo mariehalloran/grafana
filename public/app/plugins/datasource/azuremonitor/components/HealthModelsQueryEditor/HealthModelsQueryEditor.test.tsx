@@ -10,7 +10,7 @@ import HealthModelsQueryEditor from './HealthModelsQueryEditor';
 
 const subscriptionId = '11111111-1111-1111-1111-111111111111';
 const otherSubscriptionId = '22222222-2222-2222-2222-222222222222';
-const healthModelId = `/subscriptions/${subscriptionId}/resourceGroups/rg-one/providers/Microsoft.CloudHealth/healthmodels/model-one`;
+const healthModelResourceId = `/subscriptions/${subscriptionId}/resourceGroups/rg-one/providers/Microsoft.CloudHealth/healthmodels/model-one`;
 
 const variableOptionGroup = {
   label: 'Template variables',
@@ -28,7 +28,7 @@ describe('HealthModelsQueryEditor', () => {
       azureHealthModelsDatasource: {
         getHealthModels: jest.fn().mockResolvedValue([
           {
-            id: healthModelId,
+            id: healthModelResourceId,
             name: 'model-one',
             type: 'Microsoft.CloudHealth/healthmodels',
           },
@@ -38,7 +38,7 @@ describe('HealthModelsQueryEditor', () => {
     const onChange = jest.fn();
     const query = createMockHealthModelsQuery({
       subscription: subscriptionId,
-      azureHealthModels: { healthModelId: undefined },
+      azureHealthModels: { healthModelResourceId: undefined },
     });
 
     render(
@@ -63,7 +63,7 @@ describe('HealthModelsQueryEditor', () => {
       expect.objectContaining({
         subscription: subscriptionId,
         azureHealthModels: {
-          healthModelId,
+          healthModelResourceId,
         },
       })
     );
@@ -82,7 +82,7 @@ describe('HealthModelsQueryEditor', () => {
     const onChange = jest.fn();
     const query = createMockHealthModelsQuery({
       subscription: subscriptionId,
-      azureHealthModels: { healthModelId },
+      azureHealthModels: { healthModelResourceId },
     });
 
     render(
@@ -103,7 +103,7 @@ describe('HealthModelsQueryEditor', () => {
       expect.objectContaining({
         subscription: otherSubscriptionId,
         azureHealthModels: {
-          healthModelId: undefined,
+          healthModelResourceId: undefined,
         },
       })
     );
@@ -119,7 +119,7 @@ describe('HealthModelsQueryEditor', () => {
     const onChange = jest.fn();
     const query = createMockHealthModelsQuery({
       subscription: subscriptionId,
-      azureHealthModels: { healthModelId, resultFormat: 'modelGraph' },
+      azureHealthModels: { healthModelResourceId, resultFormat: 'modelGraph' },
     });
 
     render(
@@ -143,7 +143,7 @@ describe('HealthModelsQueryEditor', () => {
     expect(onChange).toHaveBeenLastCalledWith({
       ...query,
       azureHealthModels: {
-        healthModelId,
+        healthModelResourceId,
         resultFormat: 'timeSeries',
       },
     });

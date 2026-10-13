@@ -85,7 +85,7 @@ describe('Azure Monitor Datasource', () => {
     const ds = new Datasource(createMockInstanceSetttings());
     const query = createMockQuery({
       queryType: AzureQueryType.AzureHealthModels,
-      azureHealthModels: { healthModelId: undefined },
+      azureHealthModels: { healthModelResourceId: undefined },
     });
 
     expect(ds.filterQuery(query)).toBe(false);
@@ -135,7 +135,7 @@ describe('Azure Monitor Datasource', () => {
       const query = createMockQuery({
         queryType: AzureQueryType.AzureHealthModels,
         azureHealthModels: {
-          healthModelId:
+          healthModelResourceId:
             '/subscriptions/$subscription/resourceGroups/rg/providers/Microsoft.CloudHealth/healthmodels/model',
         },
       });

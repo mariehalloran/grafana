@@ -54,17 +54,19 @@ export default class AzureHealthModelsDatasource extends DataSourceWithBackend<
   }
 
   filterQuery(query: AzureMonitorQuery): boolean {
-    return Boolean(query.azureHealthModels?.healthModelId);
+    return Boolean(query.azureHealthModels?.healthModelResourceId);
   }
 
   applyTemplateVariables(target: AzureMonitorQuery, scopedVars: ScopedVars): AzureMonitorQuery {
-    const healthModelId = target.azureHealthModels?.healthModelId;
+    const healthModelResourceId = target.azureHealthModels?.healthModelResourceId;
     return {
       ...target,
       subscription: target.subscription ? this.templateSrv.replace(target.subscription, scopedVars) : undefined,
       azureHealthModels: {
         ...target.azureHealthModels,
-        healthModelId: healthModelId ? this.templateSrv.replace(healthModelId, scopedVars) : undefined,
+        healthModelResourceId: healthModelResourceId
+          ? this.templateSrv.replace(healthModelResourceId, scopedVars)
+          : undefined,
       },
     };
   }
@@ -89,24 +91,24 @@ export default class AzureHealthModelsDatasource extends DataSourceWithBackend<
   private async loadFrames(targets: AzureMonitorQuery[], range: HealthModelTimeRange): Promise<DataFrame[]> {
     const targetFrames = await Promise.all(
       targets.map(async (target) => {
-        const healthModelId = target.azureHealthModels?.healthModelId;
-        if (!healthModelId) {
+        const healthModelResourceId = target.azureHealthModels?.healthModelResourceId;
+        if (!healthModelResourceId) {
           return [];
         }
 
-        const resourceId = parseHealthModelResourceId(healthModelId);
+        const resourceId = parseHealthModelResourceId(healthModelResourceId);
         if (target.subscription && resourceId.subscriptionId.toLowerCase() !== target.subscription.toLowerCase()) {
           throw new Error('The selected Health Model does not belong to the selected subscription.');
         }
 
         if (target.azureHealthModels?.resultFormat === 'timeSeries') {
-          const entities = await this.healthModelsClients.entityData.listEntities(healthModelId, range.to);
-          return this.loadEntityHistoryFrames(target.refId, healthModelId, entities, range);
+          const entities = await this.healthModelsClients.entityData.listEntities(healthModelResourceId, range.to);
+          return this.loadEntityHistoryFrames(target.refId, healthModelResourceId, entities, range);
         }
 
         const [entities, relationships] = await Promise.all([
-          this.healthModelsClients.entityData.listEntities(healthModelId, range.to),
-          this.healthModelsClients.controlPlane.listRelationships(healthModelId, range.to),
+          this.healthModelsClients.entityData.listEntities(healthModelResourceId, range.to),
+          this.healthModelsClients.controlPlane.listRelationships(healthModelResourceId, range.to),
         ]);
 
         return nodeGraphFrames(target.refId, entities, relationships);
@@ -118,7 +120,7 @@ export default class AzureHealthModelsDatasource extends DataSourceWithBackend<
 
   private async loadEntityHistoryFrames(
     refId: string,
-    healthModelId: string,
+    healthModelResourceId: string,
     entities: HealthModelEntity[],
     range: HealthModelTimeRange
   ): Promise<DataFrame[]> {
@@ -130,7 +132,7 @@ export default class AzureHealthModelsDatasource extends DataSourceWithBackend<
         ...(await Promise.all(
           entityBatch.map(async (entity) => {
             const history = await this.healthModelsClients.entityData.getEntityHistory(
-              healthModelId,
+              healthModelResourceId,
               entity.name,
               range
             );
@@ -144,10 +146,10 @@ export default class AzureHealthModelsDatasource extends DataSourceWithBackend<
   }
 }
 
-export function parseHealthModelResourceId(healthModelId: string): HealthModelResourceId {
+export function parseHealthModelResourceId(healthModelResourceId: string): HealthModelResourceId {
   const match =
     /^\/subscriptions\/([^/]+)\/resourceGroups\/([^/]+)\/providers\/Microsoft\.CloudHealth\/healthmodels\/([^/?#]+)$/i.exec(
-      healthModelId
+      healthModelResourceId
     );
 
   if (!match) {

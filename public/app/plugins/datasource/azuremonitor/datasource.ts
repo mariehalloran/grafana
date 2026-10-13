@@ -321,7 +321,7 @@ function hasQueryForType(query: AzureMonitorQuery): boolean {
       return !!query.azureResourceGraph;
 
     case AzureQueryType.AzureHealthModels:
-      return !!query.azureHealthModels?.healthModelId;
+      return !!query.azureHealthModels?.healthModelResourceId;
 
     case AzureQueryType.AzureTraces:
     case AzureQueryType.TraceExemplar:

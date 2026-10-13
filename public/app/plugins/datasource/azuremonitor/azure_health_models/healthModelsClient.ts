@@ -20,13 +20,13 @@ export interface HealthModelsResourceClient {
 
 export interface HealthModelsControlPlaneClient {
   listHealthModels(subscriptionId: string): Promise<HealthModel[]>;
-  listRelationships(healthModelId: string, timestamp: string): Promise<HealthModelRelationship[]>;
+  listRelationships(healthModelResourceId: string, timestamp: string): Promise<HealthModelRelationship[]>;
 }
 
 export interface HealthModelsEntityClient {
-  listEntities(healthModelId: string, timestamp: string): Promise<HealthModelEntity[]>;
+  listEntities(healthModelResourceId: string, timestamp: string): Promise<HealthModelEntity[]>;
   getEntityHistory(
-    healthModelId: string,
+    healthModelResourceId: string,
     entityName: string,
     range: HealthModelTimeRange
   ): Promise<HealthModelEntityHistoryTransition[]>;
@@ -51,21 +51,21 @@ export class ArmHealthModelsClient implements HealthModelsControlPlaneClient, He
     );
   }
 
-  listEntities(healthModelId: string, timestamp: string): Promise<HealthModelEntity[]> {
-    return this.listCollection<HealthModelEntity>(`${healthModelId}/entities`, timestamp);
+  listEntities(healthModelResourceId: string, timestamp: string): Promise<HealthModelEntity[]> {
+    return this.listCollection<HealthModelEntity>(`${healthModelResourceId}/entities`, timestamp);
   }
 
-  listRelationships(healthModelId: string, timestamp: string): Promise<HealthModelRelationship[]> {
-    return this.listCollection<HealthModelRelationship>(`${healthModelId}/relationships`, timestamp);
+  listRelationships(healthModelResourceId: string, timestamp: string): Promise<HealthModelRelationship[]> {
+    return this.listCollection<HealthModelRelationship>(`${healthModelResourceId}/relationships`, timestamp);
   }
 
   async getEntityHistory(
-    healthModelId: string,
+    healthModelResourceId: string,
     entityName: string,
     range: HealthModelTimeRange
   ): Promise<HealthModelEntityHistoryTransition[]> {
     const query = new URLSearchParams({ 'api-version': HEALTH_MODELS_API_VERSION });
-    const path = `${this.resourcePath}${healthModelId}/entities/${encodeURIComponent(entityName)}/getHistory?${query.toString()}`;
+    const path = `${this.resourcePath}${healthModelResourceId}/entities/${encodeURIComponent(entityName)}/getHistory?${query.toString()}`;
     let response = await this.resourceClient.post<HealthModelEntityHistoryResponse>(path, {
       startAt: range.from,
       endAt: range.to,
