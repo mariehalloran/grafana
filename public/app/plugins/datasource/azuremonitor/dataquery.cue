@@ -41,6 +41,8 @@ composableKinds: DataQuery: {
 					azureResourceGraph?: #AzureResourceGraphQuery
 					// Application Insights Traces sub-query properties.
 					azureTraces?: #AzureTracesQuery
+					// Azure Monitor Health Models sub-query properties.
+					azureHealthModels?: #AzureHealthModelsOptions
 					// @deprecated Legacy template variable support.
 					grafanaTemplateVariableFn?: #GrafanaTemplateVariableQuery
 
@@ -67,7 +69,7 @@ composableKinds: DataQuery: {
 				} @cuetsy(kind="interface") @grafana(TSVeneer="type")
 
 				// Defines the supported queryTypes. GrafanaTemplateVariableFn is deprecated
-				#AzureQueryType: "Azure Monitor" | "Azure Log Analytics" | "Azure Resource Graph" | "Azure Traces" | "Azure Subscriptions" | "Azure Resource Groups" | "Azure Namespaces" | "Azure Resource Names" | "Azure Metric Names" | "Azure Workspaces" | "Azure Regions" | "Grafana Template Variable Function" | "traceql" | "Azure Custom Namespaces" | "Azure Custom Metric Names" | "Azure Monitor Health Models" @cuetsy(kind="enum", memberNames="AzureMonitor|LogAnalytics|AzureResourceGraph|AzureTraces|SubscriptionsQuery|ResourceGroupsQuery|NamespacesQuery|ResourceNamesQuery|MetricNamesQuery|WorkspacesQuery|LocationsQuery|GrafanaTemplateVariableFn|TraceExemplar|CustomNamespacesQuery|CustomMetricNamesQuery|AzureHealthModels")
+				#AzureQueryType: "Azure Monitor" | "Azure Log Analytics" | "Azure Resource Graph" | "Azure Traces" | "Azure Subscriptions" | "Azure Resource Groups" | "Azure Namespaces" | "Azure Resource Names" | "Azure Metric Names" | "Azure Workspaces" | "Azure Regions" | "Grafana Template Variable Function" | "traceql" | "Azure Custom Namespaces" | "Azure Custom Metric Names" | "Azure Health Models" @cuetsy(kind="enum", memberNames="AzureMonitor|LogAnalytics|AzureResourceGraph|AzureTraces|SubscriptionsQuery|ResourceGroupsQuery|NamespacesQuery|ResourceNamesQuery|MetricNamesQuery|WorkspacesQuery|LocationsQuery|GrafanaTemplateVariableFn|TraceExemplar|CustomNamespacesQuery|CustomMetricNamesQuery|AzureHealthModels")
 
 				#AzureMetricQuery: {
 					// Array of resource URIs to be queried.
@@ -168,6 +170,15 @@ composableKinds: DataQuery: {
 					// Values to filter by.
 					filters: [...string]
 				} @cuetsy(kind="interface")
+
+				#AzureHealthModelsOptions: {
+					// Full ARM resource ID of the Health Model to query.
+					healthModelId?: string
+					// Specifies the Health Model view to return. Defaults to modelGraph.
+					resultFormat?: #HealthModelsResultFormat
+				} @cuetsy(kind="interface")
+
+				#HealthModelsResultFormat: "modelGraph" | "timeSeries" @cuetsy(kind="type")
 
 				#ResultFormat:   "table" | "time_series" | "trace" | "logs" @cuetsy(kind="enum", memberNames="Table|TimeSeries|Trace|Logs")
 				#LogsEditorMode: "builder" | "raw"                          @cuetsy(kind="enum", memberNames="Builder|Raw")

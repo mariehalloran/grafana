@@ -40,6 +40,8 @@ type AzureMonitorQuery struct {
 	AzureResourceGraph *AzureResourceGraphQuery `json:"azureResourceGraph,omitempty"`
 	// Application Insights Traces sub-query properties.
 	AzureTraces *AzureTracesQuery `json:"azureTraces,omitempty"`
+	// Azure Monitor Health Models sub-query properties.
+	AzureHealthModels *AzureHealthModelsOptions `json:"azureHealthModels,omitempty"`
 	// @deprecated Legacy template variable support.
 	GrafanaTemplateVariableFn *GrafanaTemplateVariableQuery `json:"grafanaTemplateVariableFn,omitempty"`
 	// Resource group used in template variable queries
@@ -471,6 +473,25 @@ func NewAzureTracesFilter() *AzureTracesFilter {
 		Filters: []string{},
 	}
 }
+
+type AzureHealthModelsOptions struct {
+	// Full ARM resource ID of the Health Model to query.
+	HealthModelId *string `json:"healthModelId,omitempty"`
+	// Specifies the Health Model view to return. Defaults to modelGraph.
+	ResultFormat *HealthModelsResultFormat `json:"resultFormat,omitempty"`
+}
+
+// NewAzureHealthModelsOptions creates a new AzureHealthModelsOptions object.
+func NewAzureHealthModelsOptions() *AzureHealthModelsOptions {
+	return &AzureHealthModelsOptions{}
+}
+
+type HealthModelsResultFormat string
+
+const (
+	HealthModelsResultFormatModelGraph HealthModelsResultFormat = "modelGraph"
+	HealthModelsResultFormatTimeSeries HealthModelsResultFormat = "timeSeries"
+)
 
 type GrafanaTemplateVariableQuery = AppInsightsMetricNameQueryOrAppInsightsGroupByQueryOrSubscriptionsQueryOrResourceGroupsQueryOrResourceNamesQueryOrMetricNamespaceQueryOrMetricDefinitionsQueryOrMetricNamesQueryOrWorkspacesQueryOrUnknownQuery
 

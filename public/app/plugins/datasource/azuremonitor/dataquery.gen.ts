@@ -14,6 +14,10 @@ import * as common from '@grafana/schema';
 
 export interface AzureMonitorQuery extends common.DataQuery {
   /**
+   * Azure Monitor Health Models sub-query properties.
+   */
+  azureHealthModels?: AzureHealthModelsOptions;
+  /**
    * Azure Monitor Logs sub-query properties.
    */
   azureLogAnalytics?: AzureLogsQuery;
@@ -291,6 +295,19 @@ export interface AzureTracesFilter {
 export const defaultAzureTracesFilter: Partial<AzureTracesFilter> = {
   filters: [],
 };
+
+export interface AzureHealthModelsOptions {
+  /**
+   * Full ARM resource ID of the Health Model to query.
+   */
+  healthModelId?: string;
+  /**
+   * Specifies the Health Model view to return. Defaults to modelGraph.
+   */
+  resultFormat?: HealthModelsResultFormat;
+}
+
+export type HealthModelsResultFormat = ('modelGraph' | 'timeSeries');
 
 export enum ResultFormat {
   Logs = 'logs',

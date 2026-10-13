@@ -1,12 +1,6 @@
 export const HEALTH_MODELS_API_VERSION = '2026-09-01-preview';
 
-export interface AzureHealthModelsOptions {
-  healthModelId?: string;
-  /** Which view of the model to return. Defaults to `modelGraph`. */
-  resultFormat?: HealthModelsResultFormat;
-}
-
-export type HealthModelsResultFormat = 'modelGraph' | 'timeSeries';
+export type { AzureHealthModelsOptions, HealthModelsResultFormat } from '../dataquery.gen';
 
 export interface HealthModelResourceId {
   subscriptionId: string;
