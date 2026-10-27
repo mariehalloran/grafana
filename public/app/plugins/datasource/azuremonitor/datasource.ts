@@ -22,6 +22,7 @@ import { AzureQueryType } from './dataquery.gen';
 import ResourcePickerData from './resourcePicker/resourcePickerData';
 import { type AzureMonitorQuery } from './types/query';
 import { type AzureHealthModel, type AzureMonitorDataSourceJsonData } from './types/types';
+import { routeNames } from './utils/common';
 import migrateAnnotation from './utils/migrateAnnotation';
 import migrateQuery from './utils/migrateQuery';
 import { VariableSupport } from './variables';
@@ -251,7 +252,7 @@ export default class Datasource extends DataSourceWithBackend<AzureMonitorQuery,
   }
 
   getHealthModels(subscriptionId: string): Promise<AzureHealthModel[]> {
-    return this.getResource('healthmodels', {
+    return this.getResource(routeNames.healthModels, {
       subscriptionId: this.templateSrv.replace(subscriptionId),
     });
   }

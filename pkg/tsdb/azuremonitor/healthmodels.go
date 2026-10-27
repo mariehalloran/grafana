@@ -89,6 +89,9 @@ func (s *Service) handleHealthModels(rw http.ResponseWriter, req *http.Request) 
 			return
 		}
 		if response.status < http.StatusOK || response.status >= http.StatusMultipleChoices {
+			for name, values := range response.header {
+				rw.Header()[name] = values
+			}
 			rw.WriteHeader(response.status)
 			if _, err := rw.Write(response.body.Bytes()); err != nil {
 				s.logger.Error("Unable to write Health Models error response", "error", err)

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/grafana/grafana-plugin-sdk-go/backend/log"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/grafana/grafana/pkg/tsdb/azuremonitor/metrics"
@@ -36,20 +37,20 @@ func TestHealthModels(t *testing.T) {
 		var requests []string
 		s := healthModelsTestService(t, func(w http.ResponseWriter, r *http.Request) {
 			requests = append(requests, r.URL.String())
-			require.Equal(t, "configured-client", r.Header.Get("X-Test-Credentials"))
-			require.Equal(t, healthModelsCollection, r.URL.Path)
-			require.Equal(t, "v11", r.URL.Query().Get("api-version"))
+			assert.Equal(t, "configured-client", r.Header.Get("X-Test-Credentials"))
+			assert.Equal(t, healthModelsCollection, r.URL.Path)
+			assert.Equal(t, "v11", r.URL.Query().Get("api-version"))
 			w.Header().Set("Content-Type", "application/json")
 			switch r.URL.Query().Get("$skiptoken") {
 			case "":
 				_, err := fmt.Fprintf(w, `{"value":[{"id":"model-one-id","name":"model-one"}],"nextLink":"http://%s%s?api-version=v11&$skiptoken=next"}`, r.Host, healthModelsCollection)
-				require.NoError(t, err)
+				assert.NoError(t, err)
 			case "next":
 				_, err := w.Write([]byte(`{"value":[{"id":"model-two-id","name":"model-two"}],"nextLink":"?api-version=v11&$skiptoken=last"}`))
-				require.NoError(t, err)
+				assert.NoError(t, err)
 			case "last":
 				_, err := w.Write([]byte(`{"value":[{"id":"model-three-id","name":"model-three"}]}`))
-				require.NoError(t, err)
+				assert.NoError(t, err)
 			default:
 				t.Errorf("unexpected page token: %s", r.URL.RawQuery)
 			}
@@ -70,13 +71,36 @@ func TestHealthModels(t *testing.T) {
 	t.Run("returns an empty JSON array when Azure has no models", func(t *testing.T) {
 		s := healthModelsTestService(t, func(w http.ResponseWriter, r *http.Request) {
 			_, err := w.Write([]byte(`{"value":[]}`))
-			require.NoError(t, err)
+			assert.NoError(t, err)
 		})
 		response := httptest.NewRecorder()
 		s.newResourceMux().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/healthmodels?subscriptionId="+healthModelsSubscription, nil))
 		require.Equal(t, http.StatusOK, response.Code)
 		require.JSONEq(t, `[]`, response.Body.String())
 	})
+
+	for _, tt := range []struct {
+		name   string
+		status int
+		header string
+		value  string
+	}{
+		{name: "throttling", status: http.StatusTooManyRequests, header: "Retry-After", value: "30"},
+		{name: "authentication", status: http.StatusUnauthorized, header: "WWW-Authenticate", value: "Bearer"},
+	} {
+		t.Run("preserves ARM "+tt.name+" response headers", func(t *testing.T) {
+			s := healthModelsTestService(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set(tt.header, tt.value)
+				w.WriteHeader(tt.status)
+				_, err := w.Write([]byte(`{"error":{"message":"Request failed"}}`))
+				assert.NoError(t, err)
+			})
+			response := httptest.NewRecorder()
+			s.newResourceMux().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/healthmodels?subscriptionId="+healthModelsSubscription, nil))
+			require.Equal(t, tt.status, response.Code)
+			require.Equal(t, tt.value, response.Header().Get(tt.header))
+		})
+	}
 
 	for _, status := range []int{http.StatusUnauthorized, http.StatusForbidden, http.StatusTooManyRequests, http.StatusInternalServerError} {
 		t.Run(fmt.Sprintf("forwards ARM error %d without returning partial results", status), func(t *testing.T) {
@@ -85,12 +109,12 @@ func TestHealthModels(t *testing.T) {
 				requests++
 				if requests == 1 {
 					_, err := w.Write([]byte(`{"value":[{"id":"partial","name":"partial"}],"nextLink":"?page=2"}`))
-					require.NoError(t, err)
+					assert.NoError(t, err)
 					return
 				}
 				w.WriteHeader(status)
 				_, err := w.Write([]byte(`{"error":{"code":"AzureError","message":"Unable to list Health Models"}}`))
-				require.NoError(t, err)
+				assert.NoError(t, err)
 			})
 			response := httptest.NewRecorder()
 			s.newResourceMux().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/healthmodels?subscriptionId="+healthModelsSubscription, nil))
@@ -112,7 +136,7 @@ func TestHealthModels(t *testing.T) {
 			s := healthModelsTestService(t, func(w http.ResponseWriter, r *http.Request) {
 				requests++
 				_, err := fmt.Fprintf(w, `{"value":[],"nextLink":%q}`, nextLink)
-				require.NoError(t, err)
+				assert.NoError(t, err)
 			})
 			response := httptest.NewRecorder()
 			s.newResourceMux().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/healthmodels?subscriptionId="+healthModelsSubscription, nil))
@@ -127,7 +151,7 @@ func TestHealthModels(t *testing.T) {
 		s := healthModelsTestService(t, func(w http.ResponseWriter, r *http.Request) {
 			requests++
 			_, err := w.Write([]byte(`{"value":[],"nextLink":"?api-version=v11"}`))
-			require.NoError(t, err)
+			assert.NoError(t, err)
 		})
 		response := httptest.NewRecorder()
 		s.newResourceMux().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/healthmodels?subscriptionId="+healthModelsSubscription, nil))
@@ -140,7 +164,7 @@ func TestHealthModels(t *testing.T) {
 		t.Run("rejects malformed ARM response "+body, func(t *testing.T) {
 			s := healthModelsTestService(t, func(w http.ResponseWriter, r *http.Request) {
 				_, err := w.Write([]byte(body))
-				require.NoError(t, err)
+				assert.NoError(t, err)
 			})
 			response := httptest.NewRecorder()
 			s.newResourceMux().ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/healthmodels?subscriptionId="+healthModelsSubscription, nil))
@@ -183,6 +207,7 @@ type healthModelsCredentialTransport struct {
 }
 
 func (t healthModelsCredentialTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req = req.Clone(req.Context())
 	req.Header.Set("X-Test-Credentials", "configured-client")
 	return t.base.RoundTrip(req)
 }

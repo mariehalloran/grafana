@@ -2,6 +2,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { type ComponentProps } from 'react';
 
+import { getTemplateSrv } from '@grafana/runtime';
 import { mockComboboxRect } from '@grafana/test-utils';
 
 import { AzureQueryType } from '../../dataquery.gen';
@@ -14,6 +15,20 @@ const subscription = '11111111-1111-1111-1111-111111111111';
 const otherSubscription = '22222222-2222-2222-2222-222222222222';
 const modelId = `/subscriptions/${subscription}/resourceGroups/rg-one/providers/Microsoft.CloudHealth/healthmodels/model`;
 const otherModelId = `/subscriptions/${subscription}/resourceGroups/rg-two/providers/Microsoft.CloudHealth/healthmodels/model`;
+const newSubscriptionModelId = `/subscriptions/${otherSubscription}/resourceGroups/rg-three/providers/Microsoft.CloudHealth/healthmodels/new-model`;
+
+jest.mock('@grafana/runtime', () => {
+  const templateSrv = {
+    replace: jest.fn(),
+    getVariables: jest.fn(),
+    containsTemplate: jest.fn(),
+    updateTimeRange: jest.fn(),
+  };
+  return {
+    ...jest.requireActual('@grafana/runtime'),
+    getTemplateSrv: () => templateSrv,
+  };
+});
 
 function setup(overrides: Partial<ComponentProps<typeof HealthModelsQueryEditor>> = {}) {
   const props: ComponentProps<typeof HealthModelsQueryEditor> = {
@@ -39,6 +54,10 @@ function setup(overrides: Partial<ComponentProps<typeof HealthModelsQueryEditor>
 describe('HealthModelsQueryEditor', () => {
   beforeAll(() => {
     mockComboboxRect();
+  });
+
+  beforeEach(() => {
+    jest.mocked(getTemplateSrv().replace).mockImplementation((value) => value ?? '');
   });
 
   it('distinguishes models with the same name by resource group and stores the full selected ARM ID', async () => {
@@ -140,7 +159,7 @@ describe('HealthModelsQueryEditor', () => {
       getHealthModels: jest
         .fn()
         .mockReturnValueOnce(oldRequest)
-        .mockResolvedValue([{ id: '/new-model-id', name: 'new-model' }]),
+        .mockResolvedValue([{ id: newSubscriptionModelId, name: 'new-model' }]),
     });
     const props = setup({ datasource });
     props.rerender(<HealthModelsQueryEditor {...props} query={{ ...props.query, subscription: otherSubscription }} />);
@@ -151,5 +170,45 @@ describe('HealthModelsQueryEditor', () => {
     await props.user.click(screen.getByRole('combobox', { name: 'Health Model' }));
     expect(await screen.findByRole('option', { name: /new-model/ })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /old-model/ })).not.toBeInTheDocument();
+  });
+
+  it('reloads models and clears the previous selection when a subscription variable changes value', async () => {
+    jest
+      .mocked(getTemplateSrv().replace)
+      .mockImplementation((value) => (value === '$subscription' ? subscription : (value ?? '')));
+    const datasource = createMockDatasource({
+      getSubscriptions: jest.fn().mockResolvedValue([]),
+      getHealthModels: jest
+        .fn()
+        .mockResolvedValueOnce([{ id: modelId, name: 'model' }])
+        .mockResolvedValueOnce([{ id: newSubscriptionModelId, name: 'new-model' }]),
+    });
+    const props = setup({
+      datasource,
+      query: {
+        refId: 'A',
+        queryType: AzureQueryType.AzureHealthModels,
+        subscription: '$subscription',
+        azureHealthModels: { healthModelResourceId: modelId },
+      },
+    });
+    await props.user.click(screen.getByRole('combobox', { name: 'Health Model' }));
+    expect(await screen.findByRole('option', { name: /model \(rg-one\)/ })).toBeInTheDocument();
+    await props.user.keyboard('{Escape}');
+
+    jest
+      .mocked(getTemplateSrv().replace)
+      .mockImplementation((value) => (value === '$subscription' ? otherSubscription : (value ?? '')));
+    props.rerender(<HealthModelsQueryEditor {...props} />);
+
+    await waitFor(() => expect(datasource.getHealthModels).toHaveBeenCalledTimes(2));
+    expect(datasource.getHealthModels).toHaveBeenLastCalledWith(otherSubscription);
+    expect(props.onChange).toHaveBeenLastCalledWith({
+      ...props.query,
+      azureHealthModels: { healthModelResourceId: undefined },
+    });
+    await props.user.click(screen.getByRole('combobox', { name: 'Health Model' }));
+    expect(await screen.findByRole('option', { name: /new-model \(rg-three\)/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /model \(rg-one\)/ })).not.toBeInTheDocument();
   });
 });

@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { t } from '@grafana/i18n';
 import { EditorFieldGroup, EditorRow, EditorRows } from '@grafana/plugin-ui';
+import { getTemplateSrv } from '@grafana/runtime';
 import { Combobox, type ComboboxOption } from '@grafana/ui';
 
 import type Datasource from '../../datasource';
 import { type AzureMonitorQuery } from '../../types/query';
 import { type AzureMonitorErrorish, type AzureMonitorOption } from '../../types/types';
+import { parseResourceURI } from '../ResourcePicker/utils';
 import { Field } from '../shared/Field';
 
 interface Props {
@@ -34,6 +36,7 @@ export default function HealthModelsQueryEditor({
   const [loadingSubscriptions, setLoadingSubscriptions] = useState(true);
   const [loadingHealthModels, setLoadingHealthModels] = useState(false);
   const selectedSubscription = query.subscription || subscriptionId || subscriptions[0]?.value;
+  const resolvedSubscription = selectedSubscription ? getTemplateSrv().replace(selectedSubscription) : undefined;
   const selectedModel = query.azureHealthModels?.healthModelResourceId;
 
   useEffect(() => {
@@ -64,25 +67,34 @@ export default function HealthModelsQueryEditor({
   }, [datasource, setError]);
 
   useEffect(() => {
-    if (!query.subscription && selectedSubscription) {
-      onChange({ ...query, subscription: selectedSubscription });
+    const modelSubscription = selectedModel ? parseResourceURI(selectedModel).subscription : undefined;
+    const clearModel =
+      modelSubscription &&
+      resolvedSubscription &&
+      modelSubscription.toLowerCase() !== resolvedSubscription.toLowerCase();
+    if ((!query.subscription && selectedSubscription) || clearModel) {
+      const updatedQuery = { ...query, subscription: selectedSubscription };
+      if (clearModel) {
+        updatedQuery.azureHealthModels = { ...query.azureHealthModels, healthModelResourceId: undefined };
+      }
+      onChange(updatedQuery);
     }
-  }, [onChange, query, selectedSubscription]);
+  }, [onChange, query, selectedSubscription, resolvedSubscription, selectedModel]);
 
   useEffect(() => {
     let canceled = false;
     setHealthModels([]);
     setError(MODELS_ERROR, undefined);
-    setLoadingHealthModels(Boolean(selectedSubscription));
-    if (selectedSubscription) {
+    setLoadingHealthModels(Boolean(resolvedSubscription));
+    if (resolvedSubscription) {
       datasource
-        .getHealthModels(selectedSubscription)
+        .getHealthModels(resolvedSubscription)
         .then((models) => {
           if (!canceled) {
             setHealthModels(
               models.map(({ id, name }) => ({
                 value: id,
-                label: `${name} (${id.split('/')[4]})`,
+                label: `${name} (${parseResourceURI(id).resourceGroup})`,
                 description: id,
               }))
             );
@@ -103,7 +115,7 @@ export default function HealthModelsQueryEditor({
       canceled = true;
       setError(MODELS_ERROR, undefined);
     };
-  }, [datasource, selectedSubscription, setError]);
+  }, [datasource, resolvedSubscription, setError]);
 
   const subscriptionOptions = useMemo(
     () => [
@@ -143,7 +155,7 @@ export default function HealthModelsQueryEditor({
               options={healthModels}
               value={selectedModel}
               loading={loadingHealthModels}
-              disabled={!selectedSubscription}
+              disabled={!resolvedSubscription}
               width={48}
               onChange={({ value }) =>
                 onChange({

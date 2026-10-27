@@ -18,6 +18,9 @@ jest.mock('@grafana/runtime', () => {
         if (target === '$resourceGroup') {
           return 'the-resource-group';
         }
+        if (target === '$subscription') {
+          return '11111111-1111-1111-1111-111111111111';
+        }
         return target || '';
       },
       getVariables: jest.fn(),
@@ -32,10 +35,17 @@ jest.mock('@grafana/runtime', () => {
 describe('Azure Monitor Datasource', () => {
   it('lists Health Models through the backend resource endpoint with the resolved subscription', async () => {
     const ds = new Datasource(createMockInstanceSetttings());
-    const models = [{ id: '/model-id', name: 'model-one' }];
+    const models = [
+      {
+        id: '/subscriptions/11111111-1111-1111-1111-111111111111/resourceGroups/rg-one/providers/Microsoft.CloudHealth/healthmodels/model-one',
+        name: 'model-one',
+      },
+    ];
     const getResource = jest.spyOn(ds, 'getResource').mockResolvedValue(models);
-    await expect(ds.getHealthModels('$resourceGroup')).resolves.toEqual(models);
-    expect(getResource).toHaveBeenCalledWith('healthmodels', { subscriptionId: 'the-resource-group' });
+    await expect(ds.getHealthModels('$subscription')).resolves.toEqual(models);
+    expect(getResource).toHaveBeenCalledWith('healthmodels', {
+      subscriptionId: '11111111-1111-1111-1111-111111111111',
+    });
   });
 
   it('does not execute Health Models queries while only model selection is supported', async () => {
