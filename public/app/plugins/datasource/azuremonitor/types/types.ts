@@ -21,6 +21,11 @@ export type AzureMonitorDataSourceSettings = DataSourceSettings<
 >;
 export type AzureMonitorDataSourceInstanceSettings = DataSourceInstanceSettings<AzureMonitorDataSourceJsonData>;
 
+export interface AzureHealthModel {
+  id: string;
+  name: string;
+}
+
 export interface DatasourceValidationResult {
   status: 'success' | 'error';
   message: string;

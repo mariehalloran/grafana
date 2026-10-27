@@ -12,4 +12,8 @@ describe('AzureMonitor: messageFromError', () => {
     const err = invalidNamespaceError();
     expect(messageFromError(err)).toBe("The resource namespace 'grafanadev' is invalid.");
   });
+
+  it('returns a resource-handler error message', () => {
+    expect(messageFromError({ data: { error: 'Unable to list Health Models' } })).toBe('Unable to list Health Models');
+  });
 });

@@ -23,6 +23,10 @@ export default function messageFromError(error: any): string | undefined {
     return error.data.error.message;
   }
 
+  if (typeof error.data?.error === 'string') {
+    return error.data.error;
+  }
+
   // Copied from the old Angular code - this might be checking for errors in places
   // that the new code just doesnt use.
   // As new error objects are discovered they should be added to the above code, rather

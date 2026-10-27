@@ -2,7 +2,14 @@ import { OpenFeatureProvider, OpenFeatureTestProvider } from '@openfeature/react
 import { InMemoryProvider, OpenFeature } from '@openfeature/web-sdk';
 import { act, renderHook, waitFor } from '@testing-library/react';
 
-import { BATCH_API_FLAG, isBatchAPIFlagEnabled, OPEN_FEATURE_DOMAIN, useBatchAPIFlag } from './featureFlags';
+import {
+  BATCH_API_FLAG,
+  HEALTH_MODELS_FLAG,
+  isBatchAPIFlagEnabled,
+  OPEN_FEATURE_DOMAIN,
+  useBatchAPIFlag,
+  useHealthModelsFlag,
+} from './featureFlags';
 
 const batchFlagConfig = (enabled: boolean) => ({
   [BATCH_API_FLAG]: {
@@ -15,6 +22,56 @@ const batchFlagConfig = (enabled: boolean) => ({
 describe('featureFlags', () => {
   afterEach(async () => {
     await OpenFeature.clearProviders();
+  });
+
+  describe('useHealthModelsFlag', () => {
+    it('defaults to off before a provider is registered', () => {
+      const { result } = renderHook(() => useHealthModelsFlag(), {
+        wrapper: ({ children }) => <OpenFeatureProvider domain={OPEN_FEATURE_DOMAIN}>{children}</OpenFeatureProvider>,
+      });
+      expect(result.current).toBe(false);
+    });
+
+    it('defaults to off when the flag is missing from a ready provider', async () => {
+      await OpenFeature.setProviderAndWait(OPEN_FEATURE_DOMAIN, new InMemoryProvider({}));
+      const { result } = renderHook(() => useHealthModelsFlag(), {
+        wrapper: ({ children }) => <OpenFeatureProvider domain={OPEN_FEATURE_DOMAIN}>{children}</OpenFeatureProvider>,
+      });
+      expect(result.current).toBe(false);
+    });
+
+    it('updates from off to on when the plugin flag provider becomes ready', async () => {
+      const { result } = renderHook(() => useHealthModelsFlag(), {
+        wrapper: ({ children }) => (
+          <OpenFeatureTestProvider
+            domain={OPEN_FEATURE_DOMAIN}
+            flagValueMap={{ [HEALTH_MODELS_FLAG]: true }}
+            delayMs={10}
+          >
+            {children}
+          </OpenFeatureTestProvider>
+        ),
+      });
+      expect(result.current).toBe(false);
+      await waitFor(() => expect(result.current).toBe(true));
+    });
+
+    it('re-renders when the flag is disabled on a ready provider', async () => {
+      const provider = new InMemoryProvider({
+        [HEALTH_MODELS_FLAG]: { variants: { enabled: true }, defaultVariant: 'enabled', disabled: false },
+      });
+      await OpenFeature.setProviderAndWait(OPEN_FEATURE_DOMAIN, provider);
+      const { result } = renderHook(() => useHealthModelsFlag(), {
+        wrapper: ({ children }) => <OpenFeatureProvider domain={OPEN_FEATURE_DOMAIN}>{children}</OpenFeatureProvider>,
+      });
+      expect(result.current).toBe(true);
+      await act(async () => {
+        await provider.putConfiguration({
+          [HEALTH_MODELS_FLAG]: { variants: { disabled: false }, defaultVariant: 'disabled', disabled: false },
+        });
+      });
+      await waitFor(() => expect(result.current).toBe(false));
+    });
   });
 
   describe('isBatchAPIFlagEnabled', () => {

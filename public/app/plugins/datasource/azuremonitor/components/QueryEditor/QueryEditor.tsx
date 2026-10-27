@@ -1,3 +1,4 @@
+import { OpenFeatureProvider } from '@openfeature/react-sdk';
 import { debounce } from 'lodash';
 import { useCallback, useMemo, useState } from 'react';
 import { useEffectOnce } from 'react-use';
@@ -10,6 +11,7 @@ import { Alert, CodeEditor, Space, TextLink } from '@grafana/ui';
 import { AzureQueryType } from '../../dataquery.gen';
 import type AzureMonitorDatasource from '../../datasource';
 import { selectors } from '../../e2e/selectors';
+import { OPEN_FEATURE_DOMAIN } from '../../featureFlags';
 import { type AzureMonitorQuery } from '../../types/query';
 import {
   type AzureMonitorDataSourceJsonData,
@@ -18,6 +20,7 @@ import {
 } from '../../types/types';
 import useLastError from '../../utils/useLastError';
 import ArgQueryEditor from '../ArgQueryEditor/ArgQueryEditor';
+import HealthModelsQueryEditor from '../HealthModelsQueryEditor/HealthModelsQueryEditor';
 import { AzureCheatSheetModal } from '../LogsQueryEditor/AzureCheatSheetModal';
 import LogsQueryEditor from '../LogsQueryEditor/LogsQueryEditor';
 import NewMetricsQueryEditor from '../MetricsQueryEditor/MetricsQueryEditor';
@@ -164,6 +167,18 @@ const EditorForQueryType = ({
   range,
 }: EditorForQueryTypeProps) => {
   switch (query.queryType) {
+    case AzureQueryType.AzureHealthModels:
+      return (
+        <HealthModelsQueryEditor
+          query={query}
+          datasource={datasource}
+          subscriptionId={subscriptionId}
+          onChange={onQueryChange}
+          variableOptionGroup={variableOptionGroup}
+          setError={setError}
+        />
+      );
+
     case AzureQueryType.AzureMonitor:
       return (
         <NewMetricsQueryEditor
@@ -288,4 +303,10 @@ const UserAuthFallbackAlert = () => {
   );
 };
 
-export default QueryEditor;
+export default function AzureMonitorQueryEditor(props: AzureMonitorQueryEditorProps) {
+  return (
+    <OpenFeatureProvider domain={OPEN_FEATURE_DOMAIN}>
+      <QueryEditor {...props} />
+    </OpenFeatureProvider>
+  );
+}

@@ -1,8 +1,13 @@
+import { lastValueFrom } from 'rxjs';
+
+import { CoreApp, type DataQueryRequest, getDefaultTimeRange, LoadingState } from '@grafana/data';
+
 import { AzureQueryType } from './dataquery.gen';
 import Datasource from './datasource';
 import { createMockInstanceSetttings } from './mocks/instanceSettings';
 import createMockQuery from './mocks/query';
 import { singleVariable } from './mocks/variables';
+import { type AzureMonitorQuery } from './types/query';
 
 jest.mock('@grafana/runtime', () => {
   return {
@@ -25,6 +30,36 @@ jest.mock('@grafana/runtime', () => {
 });
 
 describe('Azure Monitor Datasource', () => {
+  it('lists Health Models through the backend resource endpoint with the resolved subscription', async () => {
+    const ds = new Datasource(createMockInstanceSetttings());
+    const models = [{ id: '/model-id', name: 'model-one' }];
+    const getResource = jest.spyOn(ds, 'getResource').mockResolvedValue(models);
+    await expect(ds.getHealthModels('$resourceGroup')).resolves.toEqual(models);
+    expect(getResource).toHaveBeenCalledWith('healthmodels', { subscriptionId: 'the-resource-group' });
+  });
+
+  it('does not execute Health Models queries while only model selection is supported', async () => {
+    const ds = new Datasource(createMockInstanceSetttings());
+    const request: DataQueryRequest<AzureMonitorQuery> = {
+      requestId: 'health-models',
+      interval: '1m',
+      intervalMs: 60000,
+      range: getDefaultTimeRange(),
+      scopedVars: {},
+      timezone: 'utc',
+      app: CoreApp.PanelEditor,
+      startTime: 0,
+      targets: [
+        {
+          ...createMockQuery(),
+          queryType: AzureQueryType.AzureHealthModels,
+          azureHealthModels: { healthModelResourceId: '/model-id' },
+        },
+      ],
+    };
+    await expect(lastValueFrom(ds.query(request))).resolves.toEqual({ state: LoadingState.Done, data: [] });
+  });
+
   describe('interpolateVariablesInQueries()', () => {
     it('should interpolate variables in the queries', () => {
       const ds = new Datasource(createMockInstanceSetttings());

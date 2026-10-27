@@ -1,3 +1,5 @@
+import { OpenFeatureTestProvider } from '@openfeature/react-sdk';
+import { OpenFeature } from '@openfeature/web-sdk';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -6,6 +8,7 @@ import { config, reportInteraction } from '@grafana/runtime';
 
 import { AzureQueryType, LogsEditorMode } from '../../dataquery.gen';
 import { selectors } from '../../e2e/selectors';
+import { HEALTH_MODELS_FLAG, OPEN_FEATURE_DOMAIN } from '../../featureFlags';
 import createMockQuery from '../../mocks/query';
 import { type AzureMonitorQuery } from '../../types/query';
 import { selectOptionInTest } from '../../utils/testUtils';
@@ -21,16 +24,25 @@ describe('Azure Monitor QueryHeader', () => {
   const setAzureLogsCheatSheetModalOpen = jest.fn();
   const onRunQuery = jest.fn();
 
-  const renderComponent = (query: AzureMonitorQuery, props?: Partial<React.ComponentProps<typeof QueryHeader>>) => {
+  const renderComponent = (
+    query: AzureMonitorQuery,
+    props?: Partial<React.ComponentProps<typeof QueryHeader>>,
+    healthModelsEnabled = false
+  ) => {
     return render(
-      <QueryHeader
-        query={query}
-        onQueryChange={props?.onQueryChange ?? jest.fn()}
-        setAzureLogsCheatSheetModalOpen={setAzureLogsCheatSheetModalOpen}
-        data={props?.data}
-        onRunQuery={onRunQuery}
-        app={props?.app}
-      />
+      <OpenFeatureTestProvider
+        domain={OPEN_FEATURE_DOMAIN}
+        flagValueMap={{ [HEALTH_MODELS_FLAG]: healthModelsEnabled }}
+      >
+        <QueryHeader
+          query={query}
+          onQueryChange={props?.onQueryChange ?? jest.fn()}
+          setAzureLogsCheatSheetModalOpen={setAzureLogsCheatSheetModalOpen}
+          data={props?.data}
+          onRunQuery={onRunQuery}
+          app={props?.app}
+        />
+      </OpenFeatureTestProvider>
     );
   };
 
@@ -38,9 +50,38 @@ describe('Azure Monitor QueryHeader', () => {
     config.featureToggles = {};
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     cleanup();
     jest.clearAllMocks();
+    await OpenFeature.clearProviders();
+  });
+
+  it('lets users select Health Models when its plugin flag is enabled', async () => {
+    const query = createMockQuery();
+    const onQueryChange = jest.fn();
+    renderComponent(query, { onQueryChange, app: CoreApp.PanelEditor }, true);
+    await selectOptionInTest(screen.getByLabelText(/Service/i), 'Azure Monitor Health Models');
+    expect(onQueryChange).toHaveBeenLastCalledWith({
+      ...query,
+      queryType: AzureQueryType.AzureHealthModels,
+    });
+  });
+
+  it.each([
+    { name: 'the flag is off', enabled: false, app: CoreApp.PanelEditor },
+    { name: 'unified alerting is open', enabled: true, app: CoreApp.UnifiedAlerting },
+    { name: 'cloud alerting is open', enabled: true, app: CoreApp.CloudAlerting },
+  ])('hides Health Models but keeps existing services when $name', async ({ enabled, app }) => {
+    renderComponent(createMockQuery(), { app }, enabled);
+    await waitFor(() =>
+      expect(OpenFeature.getClient(OPEN_FEATURE_DOMAIN).getBooleanValue(HEALTH_MODELS_FLAG, false)).toBe(enabled)
+    );
+    await userEvent.click(screen.getByLabelText(/Service/i));
+    expect(await screen.findByRole('option', { name: 'Metrics' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Logs' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Traces' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Azure Resource Graph' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Azure Monitor Health Models' })).not.toBeInTheDocument();
   });
 
   it('renders the service selector', async () => {

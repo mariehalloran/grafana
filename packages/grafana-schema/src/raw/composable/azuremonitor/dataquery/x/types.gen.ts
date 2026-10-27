@@ -16,6 +16,10 @@ export const pluginVersion = "%VERSION%";
 
 export interface AzureMonitorQuery extends common.DataQuery {
   /**
+   * Azure Monitor Health Models selection.
+   */
+  azureHealthModels?: AzureHealthModelsQuery;
+  /**
    * Azure Monitor Logs sub-query properties.
    */
   azureLogAnalytics?: AzureLogsQuery;
@@ -92,6 +96,7 @@ export const defaultAzureMonitorQuery: Partial<AzureMonitorQuery> = {
  * Defines the supported queryTypes. GrafanaTemplateVariableFn is deprecated
  */
 export enum AzureQueryType {
+  AzureHealthModels = 'Azure Monitor Health Models',
   AzureMonitor = 'Azure Monitor',
   AzureResourceGraph = 'Azure Resource Graph',
   AzureTraces = 'Azure Traces',
@@ -109,6 +114,13 @@ export enum AzureQueryType {
   SubscriptionsQuery = 'Azure Subscriptions',
   TraceExemplar = 'traceql',
   WorkspacesQuery = 'Azure Workspaces',
+}
+
+export interface AzureHealthModelsQuery {
+  /**
+   * Full ARM resource ID of the selected Health Model.
+   */
+  healthModelResourceId?: string;
 }
 
 export interface AzureMetricQuery {

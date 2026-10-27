@@ -40,6 +40,8 @@ type AzureMonitorQuery struct {
 	AzureResourceGraph *AzureResourceGraphQuery `json:"azureResourceGraph,omitempty"`
 	// Application Insights Traces sub-query properties.
 	AzureTraces *AzureTracesQuery `json:"azureTraces,omitempty"`
+	// Azure Monitor Health Models selection.
+	AzureHealthModels *AzureHealthModelsQuery `json:"azureHealthModels,omitempty"`
 	// @deprecated Legacy template variable support.
 	GrafanaTemplateVariableFn *GrafanaTemplateVariableQuery `json:"grafanaTemplateVariableFn,omitempty"`
 	// Resource group used in template variable queries
@@ -478,6 +480,16 @@ func NewAzureTracesFilter() *AzureTracesFilter {
 	}
 }
 
+type AzureHealthModelsQuery struct {
+	// Full ARM resource ID of the selected Health Model.
+	HealthModelResourceId *string `json:"healthModelResourceId,omitempty"`
+}
+
+// NewAzureHealthModelsQuery creates a new AzureHealthModelsQuery object.
+func NewAzureHealthModelsQuery() *AzureHealthModelsQuery {
+	return &AzureHealthModelsQuery{}
+}
+
 type GrafanaTemplateVariableQuery = AppInsightsMetricNameQueryOrAppInsightsGroupByQueryOrSubscriptionsQueryOrResourceGroupsQueryOrResourceNamesQueryOrMetricNamespaceQueryOrMetricDefinitionsQueryOrMetricNamesQueryOrWorkspacesQueryOrUnknownQuery
 
 // NewGrafanaTemplateVariableQuery creates a new GrafanaTemplateVariableQuery object.
@@ -645,6 +657,7 @@ const (
 	AzureQueryTypeTraceExemplar             AzureQueryType = "traceql"
 	AzureQueryTypeCustomNamespacesQuery     AzureQueryType = "Azure Custom Namespaces"
 	AzureQueryTypeCustomMetricNamesQuery    AzureQueryType = "Azure Custom Metric Names"
+	AzureQueryTypeAzureHealthModels         AzureQueryType = "Azure Monitor Health Models"
 )
 
 type SelectableValue struct {

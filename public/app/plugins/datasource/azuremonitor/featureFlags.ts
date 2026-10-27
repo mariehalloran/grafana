@@ -11,6 +11,9 @@ export const OPEN_FEATURE_DOMAIN = pluginJson.id;
 
 // Registered in pkg/services/featuremgmt/registry.go.
 export const BATCH_API_FLAG = 'datasources.azureMonitorBatchAPI';
+export const HEALTH_MODELS_FLAG =
+  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- This public plugin flag is managed outside the core flag-key registry.
+  'grafana-azure-monitor-datasource.health-models' as Parameters<typeof useBooleanFlagValue>[0];
 
 /**
  * Registers read-only proxies of Grafana's own providers under the plugin's
@@ -42,4 +45,8 @@ export function isBatchAPIFlagEnabled(): boolean {
 /** React hook for the flag; re-renders when the provider (re)initializes. */
 export function useBatchAPIFlag(): boolean {
   return useBooleanFlagValue(BATCH_API_FLAG, true);
+}
+
+export function useHealthModelsFlag(): boolean {
+  return useBooleanFlagValue(HEALTH_MODELS_FLAG, false);
 }

@@ -21,7 +21,7 @@ import AzureResourceGraphDatasource from './azure_resource_graph/azure_resource_
 import { AzureQueryType } from './dataquery.gen';
 import ResourcePickerData from './resourcePicker/resourcePickerData';
 import { type AzureMonitorQuery } from './types/query';
-import { type AzureMonitorDataSourceJsonData } from './types/types';
+import { type AzureHealthModel, type AzureMonitorDataSourceJsonData } from './types/types';
 import migrateAnnotation from './utils/migrateAnnotation';
 import migrateQuery from './utils/migrateQuery';
 import { VariableSupport } from './variables';
@@ -248,6 +248,12 @@ export default class Datasource extends DataSourceWithBackend<AzureMonitorQuery,
 
   getSubscriptions() {
     return this.azureMonitorDatasource.getSubscriptions();
+  }
+
+  getHealthModels(subscriptionId: string): Promise<AzureHealthModel[]> {
+    return this.getResource('healthmodels', {
+      subscriptionId: this.templateSrv.replace(subscriptionId),
+    });
   }
 
   /*Azure Log Analytics */

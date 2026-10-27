@@ -8,6 +8,7 @@ import { Button, ConfirmModal, RadioButtonGroup } from '@grafana/ui';
 
 import { AzureQueryType, LogsEditorMode } from '../../dataquery.gen';
 import { selectors } from '../../e2e/selectors';
+import { useHealthModelsFlag } from '../../featureFlags';
 import { type AzureMonitorQuery } from '../../types/query';
 
 interface QueryTypeFieldProps {
@@ -27,6 +28,7 @@ export const QueryHeader = ({
   app,
   onRunQuery,
 }: QueryTypeFieldProps) => {
+  const healthModelsEnabled = useHealthModelsFlag();
   const isLoading = useMemo(() => data?.state === LoadingState.Loading, [data?.state]);
 
   const [showModeSwitchWarning, setShowModeSwitchWarning] = useState(false);
@@ -44,6 +46,9 @@ export const QueryHeader = ({
     { value: AzureQueryType.LogAnalytics, label: 'Logs' },
     { value: AzureQueryType.AzureTraces, label: 'Traces' },
     { value: AzureQueryType.AzureResourceGraph, label: 'Azure Resource Graph' },
+    ...(healthModelsEnabled && app !== CoreApp.UnifiedAlerting && app !== CoreApp.CloudAlerting
+      ? [{ value: AzureQueryType.AzureHealthModels, label: 'Azure Monitor Health Models' }]
+      : []),
   ];
 
   const handleChange = useCallback(

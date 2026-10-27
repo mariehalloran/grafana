@@ -1,12 +1,15 @@
+import { InMemoryProvider, OpenFeature } from '@openfeature/web-sdk';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 
 import { CoreApp } from '@grafana/data';
 import { config } from '@grafana/runtime';
+import { mockComboboxRect } from '@grafana/test-utils';
 // eslint-disable-next-line no-restricted-imports
 import type * as ui from '@grafana/ui';
 
 import { AzureQueryType, ResultFormat } from '../../dataquery.gen';
 import { selectors } from '../../e2e/selectors';
+import { HEALTH_MODELS_FLAG, OPEN_FEATURE_DOMAIN } from '../../featureFlags';
 import createMockDatasource from '../../mocks/datasource';
 import { invalidNamespaceError } from '../../mocks/errors';
 import createMockQuery from '../../mocks/query';
@@ -40,13 +43,54 @@ jest.mock('@grafana/runtime', () => ({
 }));
 
 describe('Azure Monitor QueryEditor', () => {
+  beforeAll(() => {
+    mockComboboxRect();
+  });
+
   beforeEach(() => {
     config.featureToggles = {};
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     cleanup();
     jest.clearAllMocks();
+    await OpenFeature.clearProviders();
+  });
+
+  it('reads the Health Models discoverability flag from the plugin OpenFeature domain', async () => {
+    await OpenFeature.setProviderAndWait(
+      OPEN_FEATURE_DOMAIN,
+      new InMemoryProvider({
+        [HEALTH_MODELS_FLAG]: { variants: { enabled: true }, defaultVariant: 'enabled', disabled: false },
+      })
+    );
+    const datasource = createMockDatasource();
+    const query = createMockQuery();
+    const onChange = jest.fn();
+    render(<QueryEditor query={query} datasource={datasource} onChange={onChange} onRunQuery={jest.fn()} />);
+    await selectOptionInTest(screen.getByLabelText(/Service/), 'Azure Monitor Health Models');
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ queryType: AzureQueryType.AzureHealthModels, subscription: query.subscription })
+    );
+  });
+
+  it('edits a saved Health Models query when the discoverability flag is off and displays lookup errors', async () => {
+    const datasource = createMockDatasource({
+      getHealthModels: jest.fn().mockRejectedValue({ data: { error: { message: 'Health Models access denied' } } }),
+    });
+    const query = {
+      refId: 'A',
+      queryType: AzureQueryType.AzureHealthModels,
+      subscription: '11111111-1111-1111-1111-111111111111',
+      azureHealthModels: { healthModelResourceId: '/saved-model-id' },
+    };
+    const onRunQuery = jest.fn();
+    render(<QueryEditor query={query} datasource={datasource} onChange={jest.fn()} onRunQuery={onRunQuery} />);
+    expect(screen.getByRole('combobox', { name: 'Health Model' })).toHaveValue('/saved-model-id');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Health Models access denied');
+    expect(datasource.getHealthModels).toHaveBeenCalledWith('11111111-1111-1111-1111-111111111111');
+    expect(onRunQuery).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText('Result format')).not.toBeInTheDocument();
   });
 
   it('renders the Metrics query editor when the query type is Metrics', async () => {
