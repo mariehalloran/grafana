@@ -91,17 +91,17 @@ func (s *httpServiceProxy) Do(rw http.ResponseWriter, req *http.Request, cli *ht
 		return nil, err
 	}
 
+	rw.WriteHeader(res.StatusCode)
+	_, err = rw.Write(body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to write HTTP response: %v", err)
+	}
+
 	for k, v := range res.Header {
 		rw.Header().Set(k, v[0])
 		for _, v := range v[1:] {
 			rw.Header().Add(k, v)
 		}
-	}
-
-	rw.WriteHeader(res.StatusCode)
-	_, err = rw.Write(body)
-	if err != nil {
-		return nil, fmt.Errorf("unable to write HTTP response: %v", err)
 	}
 
 	// Return the ResponseWriter for testing purposes
@@ -123,7 +123,6 @@ func (s *Service) getDataSourceFromHTTPReq(req *http.Request) (types.DatasourceI
 }
 
 func writeErrorResponse(rw http.ResponseWriter, code int, msg string) {
-	rw.Header().Set("Content-Type", "application/json")
 	rw.WriteHeader(code)
 	errorBody := map[string]string{
 		"error": msg,
@@ -136,21 +135,13 @@ func writeErrorResponse(rw http.ResponseWriter, code int, msg string) {
 }
 
 func (s *Service) handleResourceReq(subDataSource string) func(rw http.ResponseWriter, req *http.Request) {
-	return s.handleResourceReqWithTarget(subDataSource, nil)
-}
-
-func (s *Service) handleResourceReqWithTarget(subDataSource string, target *url.URL) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
 		s.logger.Debug("Received resource call", "url", req.URL.String(), "method", req.Method)
 
-		var newPath string
-		if target == nil {
-			var err error
-			newPath, err = getTarget(req.URL.Path)
-			if err != nil {
-				writeErrorResponse(rw, http.StatusBadRequest, err.Error())
-				return
-			}
+		newPath, err := getTarget(req.URL.Path)
+		if err != nil {
+			writeErrorResponse(rw, http.StatusBadRequest, err.Error())
+			return
 		}
 
 		dsInfo, err := s.getDataSourceFromHTTPReq(req)
@@ -159,45 +150,20 @@ func (s *Service) handleResourceReqWithTarget(subDataSource string, target *url.
 			return
 		}
 
-		service, ok := dsInfo.Services[subDataSource]
-		if !ok {
-			writeErrorResponse(rw, http.StatusInternalServerError, fmt.Sprintf("no service configured for %s", subDataSource))
+		service := dsInfo.Services[subDataSource]
+		serviceURL, err := url.Parse(service.URL)
+		if err != nil {
+			writeErrorResponse(rw, http.StatusInternalServerError, fmt.Sprintf("unexpected error %v", err))
 			return
 		}
+		req.URL.Path = newPath
+		req.URL.Host = serviceURL.Host
+		req.URL.Scheme = serviceURL.Scheme
 
-		if target != nil {
-			upstreamReq, err := http.NewRequestWithContext(req.Context(), req.Method, target.String(), req.Body)
-			if err != nil {
-				writeErrorResponse(rw, http.StatusBadRequest, err.Error())
-				return
-			}
-			upstreamReq.ContentLength = req.ContentLength
-			upstreamReq.GetBody = req.GetBody
-			for _, name := range []string{"Accept", "Content-Type", "Content-Encoding"} {
-				if values, ok := req.Header[name]; ok {
-					upstreamReq.Header[name] = values
-				}
-			}
-			req = upstreamReq
-		} else {
-			serviceURL, err := url.Parse(service.URL)
-			if err != nil {
-				writeErrorResponse(rw, http.StatusInternalServerError, fmt.Sprintf("unexpected error %v", err))
-				return
-			}
-			req.URL.Path = newPath
-			req.URL.Host = serviceURL.Host
-			req.URL.Scheme = serviceURL.Scheme
-		}
-		req.Host = req.URL.Host
-
-		if executor, ok := s.executors[subDataSource]; ok {
-			_, err = executor.ResourceRequest(rw, req, service.HTTPClient)
-		} else {
-			proxy := httpServiceProxy{logger: s.logger}
-			_, err = proxy.Do(rw, req, service.HTTPClient)
-		}
+		_, err = s.executors[subDataSource].ResourceRequest(rw, req, service.HTTPClient)
 		if err != nil {
+			// The ResourceRequest function should handle writing the error response
+			// We log the error here to ensure it's captured
 			s.logger.Error("error in resource request", "error", err)
 			return
 		}
@@ -228,7 +194,42 @@ func (s *Service) handleHealthModelsResourceReq(rw http.ResponseWriter, req *htt
 		}
 	}
 	target.RawQuery = query.Encode()
-	s.handleResourceReqWithTarget(azureHealthModels, target)(rw, req)
+
+	dsInfo, err := s.getDataSourceFromHTTPReq(req)
+	if err != nil {
+		writeErrorResponse(rw, http.StatusInternalServerError, fmt.Sprintf("unexpected error %v", err))
+		return
+	}
+	service, ok := dsInfo.Services[azureHealthModels]
+	if !ok {
+		writeErrorResponse(rw, http.StatusInternalServerError, fmt.Sprintf("no service configured for %s", azureHealthModels))
+		return
+	}
+
+	upstreamReq, err := http.NewRequestWithContext(req.Context(), req.Method, target.String(), req.Body)
+	if err != nil {
+		writeErrorResponse(rw, http.StatusBadRequest, err.Error())
+		return
+	}
+	upstreamReq.ContentLength = req.ContentLength
+	upstreamReq.GetBody = req.GetBody
+	for _, name := range []string{"Accept", "Content-Type", "Content-Encoding"} {
+		if values, ok := req.Header[name]; ok {
+			upstreamReq.Header[name] = values
+		}
+	}
+	upstreamReq.Host = upstreamReq.URL.Host
+
+	if executor, ok := s.executors[azureHealthModels]; ok {
+		_, err = executor.ResourceRequest(rw, upstreamReq, service.HTTPClient)
+	} else {
+		proxy := httpServiceProxy{logger: s.logger}
+		_, err = proxy.Do(rw, upstreamReq, service.HTTPClient)
+	}
+	if err != nil {
+		s.logger.Error("error in resource request", "error", err)
+		return
+	}
 }
 
 // newResourceMux provides route definitions shared with the frontend.

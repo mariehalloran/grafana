@@ -173,6 +173,8 @@ composableKinds: DataQuery: {
 					healthModelResourceId?: string
 					// Type of health model query to run.
 					queryType?: #AzureHealthModelsQueryType
+					// Discovered dataplane endpoint for the selected Health Model.
+					dataplaneUrl?: string
 				} @cuetsy(kind="interface")
 
 				#AzureHealthModelsQueryType: "Entity Health Snapshot" | "Entity Health History" @cuetsy(kind="enum", memberNames="EntityHealthSnapshot|EntityHealthHistory")

@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 
 import { type TimeRange } from '@grafana/data';
-import { t } from '@grafana/i18n';
-import { EditorField, EditorFieldGroup, EditorRow, EditorRows } from '@grafana/plugin-ui';
-import { JSONFormatter, type ComboboxOption } from '@grafana/ui';
+import { EditorFieldGroup, EditorRow, EditorRows } from '@grafana/plugin-ui';
+import { type ComboboxOption } from '@grafana/ui';
 
 import { AzureHealthModelsQueryType, AzureQueryType } from '../../dataquery.gen';
 import type Datasource from '../../datasource';
@@ -46,27 +45,12 @@ const HealthModelsQueryEditor = ({
   const [healthModels, setHealthModels] = useState<Array<ComboboxOption<string>>>([]);
   const [loadingSubscriptions, setLoadingSubscriptions] = useState(true);
   const [loadingHealthModels, setLoadingHealthModels] = useState(Boolean(query.subscription || subscriptionId));
-  const [entityHealth, setEntityHealth] = useState<{
-    datasource: Datasource;
-    subscription: string;
-    healthModelResourceId: string;
-    entity: string;
-    timestamp: string | undefined;
-    data: unknown;
-  }>();
   const selectedSubscription = query.subscription || subscriptionId || subscriptions[0]?.value;
   const selectedHealthModelResourceId = query.azureHealthModels?.healthModelResourceId;
   const selectedHealthModelsQueryType = query.azureHealthModels?.queryType;
+  const dataplaneUrl = query.azureHealthModels?.dataplaneUrl;
   const entity = datasource.datasourceInstanceSettings?.jsonData.healthModelsEntityPath;
   const timestamp = range?.to.toISOString();
-  const entityResponse =
-    entityHealth?.datasource === datasource &&
-    entityHealth.subscription === selectedSubscription &&
-    entityHealth.healthModelResourceId === selectedHealthModelResourceId &&
-    entityHealth.entity === entity &&
-    entityHealth.timestamp === timestamp
-      ? entityHealth.data
-      : undefined;
   const subscriptionOptions = variableOptionGroup
     ? [
         ...subscriptions,
@@ -151,38 +135,27 @@ const HealthModelsQueryEditor = ({
 
   useEffect(() => {
     let canceled = false;
+    if (!selectedSubscription || !selectedHealthModelResourceId || dataplaneUrl) {
+      return;
+    }
+
     setError(HEALTH_MODELS_DATA_PLANE_ERROR_SOURCE, undefined);
-
-    if (!selectedSubscription || !selectedHealthModelResourceId) {
-      return;
-    }
-    if (!entity) {
-      setError(HEALTH_MODELS_DATA_PLANE_ERROR_SOURCE, new Error('The Health Models entity path is not configured'));
-      return;
-    }
-
-    const healthModelsDatasource = datasource.azureHealthModelsDatasource;
-    healthModelsDatasource
+    datasource.azureHealthModelsDatasource
       .getDataplaneUrl()
-      .then((dataplaneUrl) =>
-        healthModelsDatasource.getEntityHealth(dataplaneUrl, entity, timestamp ?? new Date().toISOString())
-      )
-      .then((result) => {
+      .then((url) => {
         if (!canceled) {
-          setEntityHealth({
-            datasource,
+          onChange({
+            ...query,
             subscription: selectedSubscription,
-            healthModelResourceId: selectedHealthModelResourceId,
-            entity,
-            timestamp,
-            data: result,
+            azureHealthModels: {
+              ...query.azureHealthModels,
+              dataplaneUrl: url,
+            },
           });
-          setError(HEALTH_MODELS_DATA_PLANE_ERROR_SOURCE, undefined);
         }
       })
       .catch((error) => {
         if (!canceled) {
-          setEntityHealth(undefined);
           setError(HEALTH_MODELS_DATA_PLANE_ERROR_SOURCE, error);
         }
       });
@@ -190,7 +163,38 @@ const HealthModelsQueryEditor = ({
     return () => {
       canceled = true;
     };
-  }, [datasource, entity, selectedSubscription, selectedHealthModelResourceId, setError, timestamp]);
+  }, [dataplaneUrl, datasource, onChange, query, selectedHealthModelResourceId, selectedSubscription, setError]);
+
+  useEffect(() => {
+    let canceled = false;
+    if (!selectedSubscription || !selectedHealthModelResourceId || !dataplaneUrl) {
+      return;
+    }
+    setError(HEALTH_MODELS_DATA_PLANE_ERROR_SOURCE, undefined);
+
+    if (!entity) {
+      setError(HEALTH_MODELS_DATA_PLANE_ERROR_SOURCE, new Error('The Health Models entity path is not configured'));
+      return;
+    }
+
+    datasource.azureHealthModelsDatasource
+      .getEntityHealth(dataplaneUrl, entity, timestamp ?? new Date().toISOString())
+      .then((result) => {
+        if (!canceled) {
+          console.log('Azure Monitor Health Models dataplane response', result);
+          setError(HEALTH_MODELS_DATA_PLANE_ERROR_SOURCE, undefined);
+        }
+      })
+      .catch((error) => {
+        if (!canceled) {
+          setError(HEALTH_MODELS_DATA_PLANE_ERROR_SOURCE, error);
+        }
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [dataplaneUrl, datasource, entity, selectedSubscription, selectedHealthModelResourceId, setError, timestamp]);
 
   useEffect(() => {
     const topHealthModelResourceId = healthModels[0]?.value;
@@ -208,6 +212,7 @@ const HealthModelsQueryEditor = ({
       azureHealthModels: {
         ...query.azureHealthModels,
         healthModelResourceId: topHealthModelResourceId,
+        dataplaneUrl: undefined,
         queryType: query.azureHealthModels?.queryType ?? DEFAULT_HEALTH_MODELS_QUERY_TYPE,
       },
     });
@@ -239,6 +244,7 @@ const HealthModelsQueryEditor = ({
       azureHealthModels: {
         ...query.azureHealthModels,
         healthModelResourceId: undefined,
+        dataplaneUrl: undefined,
       },
     });
   };
@@ -251,6 +257,7 @@ const HealthModelsQueryEditor = ({
       azureHealthModels: {
         ...query.azureHealthModels,
         healthModelResourceId: selection.value,
+        dataplaneUrl: selection.value === selectedHealthModelResourceId ? dataplaneUrl : undefined,
         queryType: query.azureHealthModels?.queryType ?? DEFAULT_HEALTH_MODELS_QUERY_TYPE,
       },
     });
@@ -297,15 +304,6 @@ const HealthModelsQueryEditor = ({
           />
         </EditorFieldGroup>
       </EditorRow>
-      {typeof entityResponse === 'object' && entityResponse !== null && (
-        <EditorRow>
-          <EditorField
-            label={t('components.health-models-query-editor.dataplane-response', 'Configured dataplane response')}
-          >
-            <JSONFormatter json={entityResponse} />
-          </EditorField>
-        </EditorRow>
-      )}
     </EditorRows>
   );
 };

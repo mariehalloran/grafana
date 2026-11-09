@@ -95,6 +95,7 @@ describe('HealthModelsQueryEditor', () => {
     query.azureHealthModels = {
       healthModelResourceId: '/subscriptions/sub-a/providers/Microsoft.CloudHealth/healthmodels/hm-2',
       queryType: AzureHealthModelsQueryType.EntityHealthHistory,
+      dataplaneUrl: 'https://unit-test.data.cloudhealth.azure.com',
     };
 
     render(<HealthModelsQueryEditor query={query} datasource={datasource} onChange={onChange} setError={setError} />);
@@ -115,9 +116,7 @@ describe('HealthModelsQueryEditor', () => {
     });
     query.azureHealthModels = {};
 
-    render(
-      <HealthModelsQueryEditor query={query} datasource={datasource} onChange={jest.fn()} setError={setError} />
-    );
+    render(<HealthModelsQueryEditor query={query} datasource={datasource} onChange={jest.fn()} setError={setError} />);
 
     await waitFor(() => expect(getHealthModels).toHaveBeenCalledWith('sub-a'));
     await waitFor(() => expect(setError).toHaveBeenCalledWith('health-models-list', healthModelError));

@@ -485,12 +485,21 @@ type AzureHealthModelsQuery struct {
 	HealthModelResourceId *string `json:"healthModelResourceId,omitempty"`
 	// Type of health model query to run.
 	QueryType *AzureHealthModelsQueryType `json:"queryType,omitempty"`
+	// Discovered dataplane endpoint for the selected Health Model.
+	DataplaneUrl *string `json:"dataplaneUrl,omitempty"`
 }
 
 // NewAzureHealthModelsQuery creates a new AzureHealthModelsQuery object.
 func NewAzureHealthModelsQuery() *AzureHealthModelsQuery {
 	return &AzureHealthModelsQuery{}
 }
+
+type AzureHealthModelsQueryType string
+
+const (
+	AzureHealthModelsQueryTypeEntityHealthSnapshot AzureHealthModelsQueryType = "Entity Health Snapshot"
+	AzureHealthModelsQueryTypeEntityHealthHistory  AzureHealthModelsQueryType = "Entity Health History"
+)
 
 type GrafanaTemplateVariableQuery = AppInsightsMetricNameQueryOrAppInsightsGroupByQueryOrSubscriptionsQueryOrResourceGroupsQueryOrResourceNamesQueryOrMetricNamespaceQueryOrMetricDefinitionsQueryOrMetricNamesQueryOrWorkspacesQueryOrUnknownQuery
 
@@ -660,13 +669,6 @@ const (
 	AzureQueryTypeTraceExemplar             AzureQueryType = "traceql"
 	AzureQueryTypeCustomNamespacesQuery     AzureQueryType = "Azure Custom Namespaces"
 	AzureQueryTypeCustomMetricNamesQuery    AzureQueryType = "Azure Custom Metric Names"
-)
-
-type AzureHealthModelsQueryType string
-
-const (
-	AzureHealthModelsQueryTypeEntityHealthSnapshot AzureHealthModelsQueryType = "Entity Health Snapshot"
-	AzureHealthModelsQueryTypeEntityHealthHistory  AzureHealthModelsQueryType = "Entity Health History"
 )
 
 type SelectableValue struct {
