@@ -44,6 +44,7 @@ export const routeNames = {
   logAnalytics: 'loganalytics',
   appInsights: 'appinsights',
   resourceGraph: 'resourcegraph',
+  healthModels: 'healthmodels',
 };
 
 export const MAX_ARM_PAGES = 50;

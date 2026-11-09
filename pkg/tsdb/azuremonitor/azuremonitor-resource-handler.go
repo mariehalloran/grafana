@@ -1,6 +1,7 @@
 package azuremonitor
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -170,6 +171,65 @@ func (s *Service) handleResourceReq(subDataSource string) func(rw http.ResponseW
 	}
 }
 
+func (s *Service) handleHealthModelsResourceReq(rw http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		rw.Header().Set("Allow", http.MethodGet)
+		writeErrorResponse(rw, http.StatusMethodNotAllowed, "the health models dataplane request only supports GET")
+		return
+	}
+
+	dsInfo, err := s.getDataSourceFromHTTPReq(req)
+	if err != nil {
+		writeErrorResponse(rw, http.StatusInternalServerError, fmt.Sprintf("unexpected error %v", err))
+		return
+	}
+	service, ok := dsInfo.Services[azureHealthModels]
+	if !ok {
+		writeErrorResponse(rw, http.StatusInternalServerError, "AZURE_HEALTH_MODELS_DATAPLANE_URL is not set for the Grafana backend")
+		return
+	}
+	endpoint, err := url.Parse(service.URL)
+	if err != nil {
+		writeErrorResponse(rw, http.StatusInternalServerError, "invalid configured health models dataplane URL")
+		return
+	}
+	upstreamReq, err := http.NewRequestWithContext(req.Context(), http.MethodGet, service.URL, nil)
+	if err != nil {
+		writeErrorResponse(rw, http.StatusBadRequest, "invalid configured health models dataplane request")
+		return
+	}
+	upstreamReq.Header.Set("Accept", "application/json")
+
+	res, err := service.HTTPClient.Do(upstreamReq)
+	if err != nil {
+		message := strings.ReplaceAll(err.Error(), endpoint.Hostname(), "[configured dataplane]")
+		s.logger.Error("health models dataplane request failed", "error", message)
+		writeErrorResponse(rw, http.StatusBadGateway, message)
+		return
+	}
+	defer func() {
+		if err := res.Body.Close(); err != nil {
+			s.logger.Warn("failed to close health models dataplane response", "error", err)
+		}
+	}()
+
+	body, err := io.ReadAll(res.Body)
+	if err != nil {
+		writeErrorResponse(rw, http.StatusBadGateway, "failed to read the health models dataplane response")
+		return
+	}
+	if res.StatusCode/100 == 2 && !json.Valid(body) {
+		writeErrorResponse(rw, http.StatusBadGateway, "invalid JSON response from the health models dataplane")
+		return
+	}
+	body = bytes.ReplaceAll(body, []byte(endpoint.Hostname()), []byte("[configured dataplane]"))
+	rw.Header().Set("Content-Type", "application/json")
+	rw.WriteHeader(res.StatusCode)
+	if _, err := rw.Write(body); err != nil {
+		s.logger.Error("failed to write health models dataplane response", "error", err)
+	}
+}
+
 // newResourceMux provides route definitions shared with the frontend.
 // Check: /public/app/plugins/datasource/azuremonitor/utils/common.ts <routeNames>
 func (s *Service) newResourceMux() *http.ServeMux {
@@ -177,5 +237,7 @@ func (s *Service) newResourceMux() *http.ServeMux {
 	mux.HandleFunc("/azuremonitor/", s.handleResourceReq(azureMonitor))
 	mux.HandleFunc("/loganalytics/", s.handleResourceReq(azureLogAnalytics))
 	mux.HandleFunc("/resourcegraph/", s.handleResourceReq(azureResourceGraph))
+	mux.HandleFunc("/healthmodels", s.handleHealthModelsResourceReq)
+	mux.HandleFunc("/healthmodels/", s.handleHealthModelsResourceReq)
 	return mux
 }

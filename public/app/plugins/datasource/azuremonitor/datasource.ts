@@ -262,6 +262,10 @@ export default class Datasource extends DataSourceWithBackend<AzureMonitorQuery,
     return this.azureHealthModelsDatasource.getHealthModels(subscriptionId);
   }
 
+  getHealthModelData(): Promise<unknown> {
+    return this.azureHealthModelsDatasource.getHealthModelData();
+  }
+
   /*Azure Log Analytics */
   getAzureLogAnalyticsWorkspaces(subscriptionId: string) {
     return this.azureLogAnalyticsDatasource.getWorkspaces(subscriptionId);

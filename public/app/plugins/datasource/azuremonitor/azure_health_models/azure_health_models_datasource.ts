@@ -31,6 +31,10 @@ export default class AzureHealthModelsDatasource extends DataSourceWithBackend<
     this.defaultSubscriptionId = instanceSettings.jsonData.subscriptionId;
   }
 
+  getHealthModelData(): Promise<unknown> {
+    return this.getResource<unknown>(`${routeNames.healthModels}/`, undefined, { showErrorAlert: false });
+  }
+
   async getHealthModels(subscriptionId: string): Promise<Array<{ text: string; value: string }>> {
     const resolvedSubscriptionId = this.templateSrv.replace(subscriptionId || this.defaultSubscriptionId || '');
     if (!resolvedSubscriptionId) {

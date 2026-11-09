@@ -9,7 +9,9 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
+	"strings"
 
 	"github.com/grafana/grafana-azure-sdk-go/v2/azcredentials"
 	"github.com/grafana/grafana-azure-sdk-go/v2/azsettings"
@@ -30,6 +32,8 @@ import (
 	"github.com/grafana/grafana/pkg/tsdb/azuremonitor/types"
 	"github.com/grafana/grafana/pkg/tsdb/azuremonitor/utils"
 )
+
+const azureHealthModels = "Azure Monitor Health Models"
 
 func ProvideService(httpClientProvider *httpclient.Provider) *Service {
 	logger := backend.NewLoggerWith("logger", "tsdb.azuremonitor")
@@ -210,6 +214,29 @@ func NewInstanceSettings(clientProvider *httpclient.Provider, executors map[stri
 				return nil, err
 			}
 			model.Services[azureMonitorBatchMetrics] = batchService
+		}
+
+		if endpoint := os.Getenv("AZURE_HEALTH_MODELS_DATAPLANE_URL"); endpoint != "" {
+			u, err := url.Parse(endpoint)
+			if err != nil || u.Scheme != "https" || u.User != nil || u.Fragment != "" ||
+				(u.Port() != "" && u.Port() != "443") ||
+				!strings.HasSuffix(strings.ToLower(u.Hostname()), ".data.cloudhealth.azure.com") {
+				return nil, errors.New("AZURE_HEALTH_MODELS_DATAPLANE_URL must be an HTTPS CloudHealth request URL without credentials, a fragment, or a non-HTTPS port")
+			}
+			model.Routes[azureHealthModels] = types.AzRoute{
+				URL:     endpoint,
+				Scopes:  []string{"https://data.cloudhealth.azure.com/.default"},
+				Headers: map[string]string{"x-ms-app": "Grafana"},
+			}
+			service, err := getDatasourceService(ctx, &settings, azureSettings, clientProvider, model, azureHealthModels, logger)
+			if err != nil {
+				return nil, err
+			}
+			// A redirect must not receive the Azure token from the authentication middleware.
+			service.HTTPClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+				return http.ErrUseLastResponse
+			}
+			model.Services[azureHealthModels] = service
 		}
 
 		return model, nil

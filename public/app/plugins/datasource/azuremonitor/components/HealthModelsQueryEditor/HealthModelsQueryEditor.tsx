@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 
-import { EditorFieldGroup, EditorRow, EditorRows } from '@grafana/plugin-ui';
-import { type ComboboxOption } from '@grafana/ui';
+import { t } from '@grafana/i18n';
+import { EditorField, EditorFieldGroup, EditorRow, EditorRows } from '@grafana/plugin-ui';
+import { JSONFormatter, type ComboboxOption } from '@grafana/ui';
 
 import { AzureHealthModelsQueryType, AzureQueryType } from '../../dataquery.gen';
 import type Datasource from '../../datasource';
@@ -23,6 +24,7 @@ interface HealthModelsQueryEditorProps {
 
 const SUBSCRIPTIONS_ERROR_SOURCE = 'health-models-subscriptions';
 const HEALTH_MODELS_ERROR_SOURCE = 'health-models-list';
+const HEALTH_MODELS_DATA_PLANE_ERROR_SOURCE = 'health-models-data-plane';
 const DEFAULT_HEALTH_MODELS_QUERY_TYPE = AzureHealthModelsQueryType.EntityHealthSnapshot;
 const HEALTH_MODELS_QUERY_TYPES = new Set<AzureHealthModelsQueryType>([
   AzureHealthModelsQueryType.EntityHealthSnapshot,
@@ -41,9 +43,21 @@ const HealthModelsQueryEditor = ({
   const [healthModels, setHealthModels] = useState<Array<ComboboxOption<string>>>([]);
   const [loadingSubscriptions, setLoadingSubscriptions] = useState(true);
   const [loadingHealthModels, setLoadingHealthModels] = useState(Boolean(query.subscription || subscriptionId));
+  const [entityHealth, setEntityHealth] = useState<{
+    datasource: Datasource;
+    subscription: string;
+    healthModelResourceId: string;
+    data: unknown;
+  }>();
   const selectedSubscription = query.subscription || subscriptionId || subscriptions[0]?.value;
   const selectedHealthModelResourceId = query.azureHealthModels?.healthModelResourceId;
   const selectedHealthModelsQueryType = query.azureHealthModels?.queryType;
+  const entityResponse =
+    entityHealth?.datasource === datasource &&
+    entityHealth.subscription === selectedSubscription &&
+    entityHealth.healthModelResourceId === selectedHealthModelResourceId
+      ? entityHealth.data
+      : undefined;
   const subscriptionOptions = variableOptionGroup
     ? [
         ...subscriptions,
@@ -127,6 +141,39 @@ const HealthModelsQueryEditor = ({
   }, [datasource, selectedSubscription, setError]);
 
   useEffect(() => {
+    let canceled = false;
+    setError(HEALTH_MODELS_DATA_PLANE_ERROR_SOURCE, undefined);
+
+    if (!selectedSubscription || !selectedHealthModelResourceId) {
+      return;
+    }
+
+    datasource
+      .getHealthModelData()
+      .then((result) => {
+        if (!canceled) {
+          setEntityHealth({
+            datasource,
+            subscription: selectedSubscription,
+            healthModelResourceId: selectedHealthModelResourceId,
+            data: result,
+          });
+          setError(HEALTH_MODELS_DATA_PLANE_ERROR_SOURCE, undefined);
+        }
+      })
+      .catch((error) => {
+        if (!canceled) {
+          setEntityHealth(undefined);
+          setError(HEALTH_MODELS_DATA_PLANE_ERROR_SOURCE, error);
+        }
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, [datasource, selectedSubscription, selectedHealthModelResourceId, setError]);
+
+  useEffect(() => {
     const topHealthModelResourceId = healthModels[0]?.value;
     if (!topHealthModelResourceId || !selectedSubscription) {
       return;
@@ -162,13 +209,7 @@ const HealthModelsQueryEditor = ({
         queryType: DEFAULT_HEALTH_MODELS_QUERY_TYPE,
       },
     });
-  }, [
-    onChange,
-    query,
-    selectedHealthModelResourceId,
-    selectedHealthModelsQueryType,
-    selectedSubscription,
-  ]);
+  }, [onChange, query, selectedHealthModelResourceId, selectedHealthModelsQueryType, selectedSubscription]);
 
   const onSubscriptionChange = (selection: ComboboxOption<string>) => {
     setHealthModels([]);
@@ -237,6 +278,15 @@ const HealthModelsQueryEditor = ({
           />
         </EditorFieldGroup>
       </EditorRow>
+      {typeof entityResponse === 'object' && entityResponse !== null && (
+        <EditorRow>
+          <EditorField
+            label={t('components.health-models-query-editor.dataplane-response', 'Configured dataplane response')}
+          >
+            <JSONFormatter json={entityResponse} />
+          </EditorField>
+        </EditorRow>
+      )}
     </EditorRows>
   );
 };
