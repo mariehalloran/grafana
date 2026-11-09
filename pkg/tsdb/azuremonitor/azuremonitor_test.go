@@ -60,6 +60,10 @@ var testRoutes = map[string]types.AzRoute{
 		Scopes:  []string{"https://metrics.monitor.azure.com/.default"},
 		Headers: map[string]string{"x-ms-app": "Grafana"},
 	},
+	azureHealthModels: {
+		Scopes:  []string{"https://data.cloudhealth.azure.com/.default"},
+		Headers: map[string]string{"x-ms-app": "Grafana"},
+	},
 }
 
 func TestNewInstanceSettings(t *testing.T) {
@@ -105,6 +109,7 @@ func TestNewInstanceSettings(t *testing.T) {
 				DecryptedSecureJSONData: map[string]string{"key": "value"},
 				Services: map[string]types.DatasourceService{
 					azureMonitorBatchMetrics: {URL: testRoutes[azureMonitorBatchMetrics].URL},
+					azureHealthModels:        {},
 				},
 			},
 			Err: require.NoError,

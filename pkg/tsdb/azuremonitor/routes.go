@@ -113,6 +113,13 @@ func getAzureMonitorRoutes(settings *azsettings.AzureSettings, credentials azcre
 		azureMonitorBatchMetrics: metricsDataPlaneRoute,
 	}
 
+	if azureCloud == azsettings.AzurePublic {
+		routes[azureHealthModels] = types.AzRoute{
+			Scopes:  []string{"https://data.cloudhealth.azure.com/.default"},
+			Headers: map[string]string{"x-ms-app": "Grafana"},
+		}
+	}
+
 	return routes, nil
 }
 

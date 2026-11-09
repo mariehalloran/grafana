@@ -31,8 +31,21 @@ export default class AzureHealthModelsDatasource extends DataSourceWithBackend<
     this.defaultSubscriptionId = instanceSettings.jsonData.subscriptionId;
   }
 
-  getHealthModelData(): Promise<unknown> {
-    return this.getResource<unknown>(`${routeNames.healthModels}/`, undefined, { showErrorAlert: false });
+  getDataplaneUrl(): Promise<string> {
+    // Local .env provisioning supplies this until ARM endpoint discovery is available.
+    const url = this.datasourceInstanceSettings.jsonData.healthModelsDataplaneUrl;
+    if (!url) {
+      return Promise.reject(new Error('The Health Models dataplane URL is not configured'));
+    }
+    return Promise.resolve(url);
+  }
+
+  getEntityHealth(dataplaneUrl: string, entity: string, timeline: string): Promise<unknown> {
+    return this.getResource<unknown>(
+      routeNames.healthModels,
+      { dataplaneUrl, path: entity, timestamp: timeline },
+      { showErrorAlert: false }
+    );
   }
 
   async getHealthModels(subscriptionId: string): Promise<Array<{ text: string; value: string }>> {

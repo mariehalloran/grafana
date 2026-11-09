@@ -33,6 +33,8 @@ export interface AzureMonitorDataSourceJsonData extends AzureDataSourceJsonData 
   basicLogsEnabled?: boolean;
   auxiliaryLogsEnabled?: boolean;
   batchAPIEnabled?: boolean;
+  healthModelsDataplaneUrl?: string;
+  healthModelsEntityPath?: string;
 
   // logs
   /** @deprecated Azure Logs credentials */

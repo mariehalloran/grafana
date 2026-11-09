@@ -232,6 +232,7 @@ const EditorForQueryType = ({
           onChange={onChange}
           variableOptionGroup={variableOptionGroup}
           setError={setError}
+          range={range}
         />
       );
 

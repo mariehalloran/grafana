@@ -9,9 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
-	"strings"
 
 	"github.com/grafana/grafana-azure-sdk-go/v2/azcredentials"
 	"github.com/grafana/grafana-azure-sdk-go/v2/azsettings"
@@ -216,18 +214,7 @@ func NewInstanceSettings(clientProvider *httpclient.Provider, executors map[stri
 			model.Services[azureMonitorBatchMetrics] = batchService
 		}
 
-		if endpoint := os.Getenv("AZURE_HEALTH_MODELS_DATAPLANE_URL"); endpoint != "" {
-			u, err := url.Parse(endpoint)
-			if err != nil || u.Scheme != "https" || u.User != nil || u.Fragment != "" ||
-				(u.Port() != "" && u.Port() != "443") ||
-				!strings.HasSuffix(strings.ToLower(u.Hostname()), ".data.cloudhealth.azure.com") {
-				return nil, errors.New("AZURE_HEALTH_MODELS_DATAPLANE_URL must be an HTTPS CloudHealth request URL without credentials, a fragment, or a non-HTTPS port")
-			}
-			model.Routes[azureHealthModels] = types.AzRoute{
-				URL:     endpoint,
-				Scopes:  []string{"https://data.cloudhealth.azure.com/.default"},
-				Headers: map[string]string{"x-ms-app": "Grafana"},
-			}
+		if _, ok := routesForModel[azureHealthModels]; ok {
 			service, err := getDatasourceService(ctx, &settings, azureSettings, clientProvider, model, azureHealthModels, logger)
 			if err != nil {
 				return nil, err

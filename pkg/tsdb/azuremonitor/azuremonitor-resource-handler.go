@@ -1,7 +1,6 @@
 package azuremonitor
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -92,17 +91,17 @@ func (s *httpServiceProxy) Do(rw http.ResponseWriter, req *http.Request, cli *ht
 		return nil, err
 	}
 
-	rw.WriteHeader(res.StatusCode)
-	_, err = rw.Write(body)
-	if err != nil {
-		return nil, fmt.Errorf("unable to write HTTP response: %v", err)
-	}
-
 	for k, v := range res.Header {
 		rw.Header().Set(k, v[0])
 		for _, v := range v[1:] {
 			rw.Header().Add(k, v)
 		}
+	}
+
+	rw.WriteHeader(res.StatusCode)
+	_, err = rw.Write(body)
+	if err != nil {
+		return nil, fmt.Errorf("unable to write HTTP response: %v", err)
 	}
 
 	// Return the ResponseWriter for testing purposes
@@ -124,6 +123,7 @@ func (s *Service) getDataSourceFromHTTPReq(req *http.Request) (types.DatasourceI
 }
 
 func writeErrorResponse(rw http.ResponseWriter, code int, msg string) {
+	rw.Header().Set("Content-Type", "application/json")
 	rw.WriteHeader(code)
 	errorBody := map[string]string{
 		"error": msg,
@@ -136,13 +136,21 @@ func writeErrorResponse(rw http.ResponseWriter, code int, msg string) {
 }
 
 func (s *Service) handleResourceReq(subDataSource string) func(rw http.ResponseWriter, req *http.Request) {
+	return s.handleResourceReqWithTarget(subDataSource, nil)
+}
+
+func (s *Service) handleResourceReqWithTarget(subDataSource string, target *url.URL) func(rw http.ResponseWriter, req *http.Request) {
 	return func(rw http.ResponseWriter, req *http.Request) {
 		s.logger.Debug("Received resource call", "url", req.URL.String(), "method", req.Method)
 
-		newPath, err := getTarget(req.URL.Path)
-		if err != nil {
-			writeErrorResponse(rw, http.StatusBadRequest, err.Error())
-			return
+		var newPath string
+		if target == nil {
+			var err error
+			newPath, err = getTarget(req.URL.Path)
+			if err != nil {
+				writeErrorResponse(rw, http.StatusBadRequest, err.Error())
+				return
+			}
 		}
 
 		dsInfo, err := s.getDataSourceFromHTTPReq(req)
@@ -151,83 +159,76 @@ func (s *Service) handleResourceReq(subDataSource string) func(rw http.ResponseW
 			return
 		}
 
-		service := dsInfo.Services[subDataSource]
-		serviceURL, err := url.Parse(service.URL)
-		if err != nil {
-			writeErrorResponse(rw, http.StatusInternalServerError, fmt.Sprintf("unexpected error %v", err))
+		service, ok := dsInfo.Services[subDataSource]
+		if !ok {
+			writeErrorResponse(rw, http.StatusInternalServerError, fmt.Sprintf("no service configured for %s", subDataSource))
 			return
 		}
-		req.URL.Path = newPath
-		req.URL.Host = serviceURL.Host
-		req.URL.Scheme = serviceURL.Scheme
 
-		_, err = s.executors[subDataSource].ResourceRequest(rw, req, service.HTTPClient)
+		if target != nil {
+			upstreamReq, err := http.NewRequestWithContext(req.Context(), req.Method, target.String(), req.Body)
+			if err != nil {
+				writeErrorResponse(rw, http.StatusBadRequest, err.Error())
+				return
+			}
+			upstreamReq.ContentLength = req.ContentLength
+			upstreamReq.GetBody = req.GetBody
+			for _, name := range []string{"Accept", "Content-Type", "Content-Encoding"} {
+				if values, ok := req.Header[name]; ok {
+					upstreamReq.Header[name] = values
+				}
+			}
+			req = upstreamReq
+		} else {
+			serviceURL, err := url.Parse(service.URL)
+			if err != nil {
+				writeErrorResponse(rw, http.StatusInternalServerError, fmt.Sprintf("unexpected error %v", err))
+				return
+			}
+			req.URL.Path = newPath
+			req.URL.Host = serviceURL.Host
+			req.URL.Scheme = serviceURL.Scheme
+		}
+		req.Host = req.URL.Host
+
+		if executor, ok := s.executors[subDataSource]; ok {
+			_, err = executor.ResourceRequest(rw, req, service.HTTPClient)
+		} else {
+			proxy := httpServiceProxy{logger: s.logger}
+			_, err = proxy.Do(rw, req, service.HTTPClient)
+		}
 		if err != nil {
-			// The ResourceRequest function should handle writing the error response
-			// We log the error here to ensure it's captured
 			s.logger.Error("error in resource request", "error", err)
 			return
 		}
 	}
 }
 
-func (s *Service) handleHealthModelsResourceReq(rw http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodGet {
-		rw.Header().Set("Allow", http.MethodGet)
-		writeErrorResponse(rw, http.StatusMethodNotAllowed, "the health models dataplane request only supports GET")
+func (s *Service) handleHealthModelsResourceReq(rw http.ResponseWriter, req *http.Request, dataplaneURL, resourcePath string) {
+	endpoint, err := url.Parse(dataplaneURL)
+	if err != nil || endpoint.Scheme != "https" || endpoint.User != nil || endpoint.Fragment != "" ||
+		(endpoint.Port() != "" && endpoint.Port() != "443") ||
+		!strings.HasSuffix(strings.ToLower(endpoint.Hostname()), ".data.cloudhealth.azure.com") {
+		writeErrorResponse(rw, http.StatusBadRequest, "dataplaneUrl must be an HTTPS CloudHealth endpoint")
 		return
 	}
-
-	dsInfo, err := s.getDataSourceFromHTTPReq(req)
-	if err != nil {
-		writeErrorResponse(rw, http.StatusInternalServerError, fmt.Sprintf("unexpected error %v", err))
+	operation, err := url.Parse(resourcePath)
+	if err != nil || operation.IsAbs() || operation.Host != "" || operation.User != nil || operation.Fragment != "" {
+		writeErrorResponse(rw, http.StatusBadRequest, "path must be relative to the dataplane endpoint")
 		return
 	}
-	service, ok := dsInfo.Services[azureHealthModels]
-	if !ok {
-		writeErrorResponse(rw, http.StatusInternalServerError, "AZURE_HEALTH_MODELS_DATAPLANE_URL is not set for the Grafana backend")
-		return
+	target := endpoint.JoinPath(operation.EscapedPath())
+	query := target.Query()
+	for key, values := range operation.Query() {
+		query[key] = values
 	}
-	endpoint, err := url.Parse(service.URL)
-	if err != nil {
-		writeErrorResponse(rw, http.StatusInternalServerError, "invalid configured health models dataplane URL")
-		return
-	}
-	upstreamReq, err := http.NewRequestWithContext(req.Context(), http.MethodGet, service.URL, nil)
-	if err != nil {
-		writeErrorResponse(rw, http.StatusBadRequest, "invalid configured health models dataplane request")
-		return
-	}
-	upstreamReq.Header.Set("Accept", "application/json")
-
-	res, err := service.HTTPClient.Do(upstreamReq)
-	if err != nil {
-		message := strings.ReplaceAll(err.Error(), endpoint.Hostname(), "[configured dataplane]")
-		s.logger.Error("health models dataplane request failed", "error", message)
-		writeErrorResponse(rw, http.StatusBadGateway, message)
-		return
-	}
-	defer func() {
-		if err := res.Body.Close(); err != nil {
-			s.logger.Warn("failed to close health models dataplane response", "error", err)
+	for key, values := range req.URL.Query() {
+		if key != "dataplaneUrl" && key != "path" {
+			query[key] = values
 		}
-	}()
-
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		writeErrorResponse(rw, http.StatusBadGateway, "failed to read the health models dataplane response")
-		return
 	}
-	if res.StatusCode/100 == 2 && !json.Valid(body) {
-		writeErrorResponse(rw, http.StatusBadGateway, "invalid JSON response from the health models dataplane")
-		return
-	}
-	body = bytes.ReplaceAll(body, []byte(endpoint.Hostname()), []byte("[configured dataplane]"))
-	rw.Header().Set("Content-Type", "application/json")
-	rw.WriteHeader(res.StatusCode)
-	if _, err := rw.Write(body); err != nil {
-		s.logger.Error("failed to write health models dataplane response", "error", err)
-	}
+	target.RawQuery = query.Encode()
+	s.handleResourceReqWithTarget(azureHealthModels, target)(rw, req)
 }
 
 // newResourceMux provides route definitions shared with the frontend.
@@ -237,7 +238,11 @@ func (s *Service) newResourceMux() *http.ServeMux {
 	mux.HandleFunc("/azuremonitor/", s.handleResourceReq(azureMonitor))
 	mux.HandleFunc("/loganalytics/", s.handleResourceReq(azureLogAnalytics))
 	mux.HandleFunc("/resourcegraph/", s.handleResourceReq(azureResourceGraph))
-	mux.HandleFunc("/healthmodels", s.handleHealthModelsResourceReq)
-	mux.HandleFunc("/healthmodels/", s.handleHealthModelsResourceReq)
+	healthModels := func(rw http.ResponseWriter, req *http.Request) {
+		params := req.URL.Query()
+		s.handleHealthModelsResourceReq(rw, req, params.Get("dataplaneUrl"), params.Get("path"))
+	}
+	mux.HandleFunc("/healthmodels", healthModels)
+	mux.HandleFunc("/healthmodels/", healthModels)
 	return mux
 }
